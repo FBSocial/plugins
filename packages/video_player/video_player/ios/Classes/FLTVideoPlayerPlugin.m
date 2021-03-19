@@ -4,8 +4,10 @@
 
 #import "FLTVideoPlayerPlugin.h"
 #import <AVFoundation/AVFoundation.h>
+#import <CommonCrypto/CommonDigest.h>
 #import <GLKit/GLKit.h>
 #import "messages.h"
+#import "DVURLAsset.h"
 
 #if !__has_feature(objc_arc)
 #error Code Requires ARC.
@@ -51,6 +53,8 @@ int64_t FLTCMTimeToMillis(CMTime time) {
 - (void)pause;
 - (void)setIsLooping:(bool)isLooping;
 - (void)updatePlayingState;
+
+@property(nonatomic) CGSize renderSize;
 @end
 
 static void* timeRangeContext = &timeRangeContext;
@@ -141,6 +145,8 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     height = videoTrack.naturalSize.width;
   }
   videoComposition.renderSize = CGSizeMake(width, height);
+  _renderSize = videoComposition.renderSize;  //[dj]:[ID1090896]
+
 
   // TODO(@recastrodiaz): should we use videoTrack.nominalFrameRate ?
   // Currently set at a constant 30 FPS
@@ -156,15 +162,31 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
   };
   _videoOutput = [[AVPlayerItemVideoOutput alloc] initWithPixelBufferAttributes:pixBuffAttributes];
 
-  _displayLink = [CADisplayLink displayLinkWithTarget:frameUpdater
+   _displayLink = [CADisplayLink displayLinkWithTarget:frameUpdater
                                              selector:@selector(onDisplayLink:)];
   [_displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
   _displayLink.paused = YES;
 }
 
 - (instancetype)initWithURL:(NSURL*)url frameUpdater:(FLTFrameUpdater*)frameUpdater {
-  AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
-  return [self initWithPlayerItem:item frameUpdater:frameUpdater];
+    if (url != nil && [url pathExtension] != nil && [[url scheme] hasPrefix:@"http"] && [[[url pathExtension] lowercaseString] isEqualToString:@"cachevideo"]) {
+        NSString *urlString = [url absoluteString];
+        urlString = [urlString substringToIndex:[urlString rangeOfComposedCharacterSequenceAtIndex:[urlString length] - [@".cachevideo" length]].location];
+        url = [NSURL URLWithString:urlString];
+        if ([DVURLAsset isCached:url]) {
+            NSString * cachedPath = [DVURLAsset cachedFilePath:url];
+            AVAsset *asset = [AVAsset assetWithURL:[NSURL URLWithString:[@"file://" stringByAppendingString:cachedPath]]];
+            AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
+            return [self initWithPlayerItem:item frameUpdater:frameUpdater];
+        } else {
+            DVURLAsset *asset = [[DVURLAsset alloc] initWithURL:url options:nil];
+            AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
+            return [self initWithPlayerItem:item frameUpdater:frameUpdater];
+        }
+    }else {
+        AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
+        return [self initWithPlayerItem:item frameUpdater:frameUpdater];
+    }
 }
 
 - (CGAffineTransform)fixTransform:(AVAssetTrack*)videoTrack {
@@ -173,7 +195,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
   // At least 2 user videos show a black screen when in portrait mode if we directly use the
   // videoTrack.preferredTransform Setting tx to the height of the video instead of 0, properly
   // displays the video https://github.com/flutter/flutter/issues/17606#issuecomment-413473181
-  if (transform.tx == 0 && transform.ty == 0) {
+//    if ((transform.tx == 0 || fabs(transform.tx - 640) < 5) && (transform.ty == 0 || fabs(transform.ty - 640) < 5)) {
     NSInteger rotationDegrees = (NSInteger)round(radiansToDegrees(atan2(transform.b, transform.a)));
     NSLog(@"TX and TY are 0. Rotation: %ld. Natural width,height: %f, %f", (long)rotationDegrees,
           videoTrack.naturalSize.width, videoTrack.naturalSize.height);
@@ -186,7 +208,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
       transform.tx = 0;
       transform.ty = videoTrack.naturalSize.width;
     }
-  }
+//  }
   return transform;
 }
 
@@ -303,28 +325,52 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 }
 
 - (void)sendInitialized {
-  if (_eventSink && !_isInitialized) {
-    CGSize size = [self.player currentItem].presentationSize;
-    CGFloat width = size.width;
-    CGFloat height = size.height;
-
-    // The player has not yet initialized.
-    if (height == CGSizeZero.height && width == CGSizeZero.width) {
-      return;
+//  if (_eventSink && !_isInitialized) {
+//    CGSize size = [self.player currentItem].presentationSize;
+    NSString *url = @"";
+    if (_player && [_player currentItem] && [[_player currentItem] asset] && [[[_player currentItem] asset] isKindOfClass:[AVURLAsset class]]) {
+        AVURLAsset *urlAsset = (AVURLAsset *)[[_player currentItem] asset];
+        if ([urlAsset URL]) {
+            url = [[(AVURLAsset *)[[_player currentItem] asset] URL] absoluteString];
+        }
     }
-    // The player may be initialized but still needs to determine the duration.
-    if ([self duration] == 0) {
-      return;
-    }
+    if ([[url lowercaseString] containsString:@".m3u8"] && _eventSink && !_isInitialized) {
+        CGSize size = _renderSize;
+        
+        CGFloat width = size.width;
+        CGFloat height = size.height;
+        int64_t duration = [self duration] <= 0 ? 1 : [self duration];
 
-    _isInitialized = true;
-    _eventSink(@{
-      @"event" : @"initialized",
-      @"duration" : @([self duration]),
-      @"width" : @(width),
-      @"height" : @(height)
-    });
-  }
+        _isInitialized = true;
+        _eventSink(@{
+          @"event" : @"initialized",
+          @"duration" : @(duration),
+          @"width" : @(width),
+          @"height" : @(height)
+        });
+    }else if (_eventSink && !_isInitialized && !CGSizeEqualToSize(_renderSize, CGSizeZero)) { //
+        CGSize size = _renderSize;
+          
+        CGFloat width = size.width;
+        CGFloat height = size.height;
+
+        // The player has not yet initialized.
+        if (height == CGSizeZero.height && width == CGSizeZero.width) {
+          return;
+        }
+        // The player may be initialized but still needs to determine the duration.
+    //     if ([self duration] == 0) {
+    //       return;
+    //     }
+
+        _isInitialized = true;
+        _eventSink(@{
+          @"event" : @"initialized",
+          @"duration" : @([self duration]),
+          @"width" : @(width),
+          @"height" : @(height)
+        });
+    }
 }
 
 - (void)play {
