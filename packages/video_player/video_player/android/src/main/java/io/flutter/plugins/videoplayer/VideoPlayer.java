@@ -6,6 +6,8 @@ import static com.google.android.exoplayer2.Player.REPEAT_MODE_OFF;
 import android.content.Context;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
+import android.os.StatFs;
 import android.view.Surface;
 
 import com.danikula.videocache.CacheListener;
@@ -79,8 +81,12 @@ final class VideoPlayer implements CacheListener {
     String proxyUrl;
     if (dataSource.endsWith(".cachevideo")) {
       dataSource = dataSource.substring(0, dataSource.length() - ".cachevideo".length());
-      proxyCacheServer.registerCacheListener(this, dataSource);
-      proxyUrl = proxyCacheServer.getProxyUrl(dataSource);
+      if (proxyCacheServer.canCache()) {
+        proxyCacheServer.registerCacheListener(this, dataSource);
+        proxyUrl = proxyCacheServer.getProxyUrl(dataSource);
+      }else {
+        proxyUrl = dataSource;
+      }
     }else {
       proxyUrl = dataSource;
     }

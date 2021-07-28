@@ -2,6 +2,7 @@ package com.danikula.videocache;
 
 import android.content.Context;
 import android.net.Uri;
+import android.os.StatFs;
 
 import com.danikula.videocache.file.DiskUsage;
 import com.danikula.videocache.file.FileNameGenerator;
@@ -195,6 +196,12 @@ public class HttpProxyCacheServer {
         File cacheDir = config.cacheRoot;
         String fileName = config.fileNameGenerator.generate(url);
         return new File(cacheDir, fileName);
+    }
+
+    public boolean canCache() {
+        StatFs statFs = new StatFs(config.cacheRoot.getPath());
+        long availCount = statFs.getAvailableBlocks();
+        return availCount / 1024 / 1024 > 300;
     }
 
     private void touchFileSafely(File cacheFile) {
