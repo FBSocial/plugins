@@ -173,20 +173,39 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
         NSString *urlString = [url absoluteString];
         urlString = [urlString substringToIndex:[urlString rangeOfComposedCharacterSequenceAtIndex:[urlString length] - [@".cachevideo" length]].location];
         url = [NSURL URLWithString:urlString];
-        if ([DVURLAsset isCached:url]) {
-            NSString * cachedPath = [DVURLAsset cachedFilePath:url];
-            AVAsset *asset = [AVAsset assetWithURL:[NSURL URLWithString:[@"file://" stringByAppendingString:cachedPath]]];
-            AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
-            return [self initWithPlayerItem:item frameUpdater:frameUpdater];
-        } else {
-            DVURLAsset *asset = [[DVURLAsset alloc] initWithURL:url options:nil];
-            AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
+        if ([self canCacheVideo]) {
+            if ([DVURLAsset isCached:url]) {
+                NSString * cachedPath = [DVURLAsset cachedFilePath:url];
+                AVAsset *asset = [AVAsset assetWithURL:[NSURL URLWithString:[@"file://" stringByAppendingString:cachedPath]]];
+                AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
+                return [self initWithPlayerItem:item frameUpdater:frameUpdater];
+            } else {
+                DVURLAsset *asset = [[DVURLAsset alloc] initWithURL:url options:nil];
+                AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
+                return [self initWithPlayerItem:item frameUpdater:frameUpdater];
+            }
+        }else {
+            AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
             return [self initWithPlayerItem:item frameUpdater:frameUpdater];
         }
     }else {
         AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
         return [self initWithPlayerItem:item frameUpdater:frameUpdater];
     }
+}
+
+-(BOOL)canCacheVideo {
+    NSError *error = nil;
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSDictionary *dictionary = [[NSFileManager defaultManager] attributesOfFileSystemForPath:[paths lastObject] error: &error];
+    
+    if (dictionary && error == nil) {
+        NSNumber *freeFileSystemSizeInBytes = [dictionary objectForKey:NSFileSystemFreeSize];
+        return freeFileSystemSizeInBytes != nil && (freeFileSystemSizeInBytes.longLongValue / 1024 / 1024 > 300);
+    } else {
+        return false;
+    }
+    return false;
 }
 
 - (CGAffineTransform)fixTransform:(AVAssetTrack*)videoTrack {
