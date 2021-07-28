@@ -200,7 +200,7 @@ public class HttpProxyCacheServer {
 
     public boolean canCache() {
         StatFs statFs = new StatFs(config.cacheRoot.getPath());
-        long availCount = statFs.getAvailableBlocks();
+        long availCount = statFs.getAvailableBlocksLong();
         return availCount / 1024 / 1024 > 300;
     }
 
