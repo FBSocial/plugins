@@ -26,6 +26,7 @@ class Config {
         this.diskUsage = diskUsage;
         this.sourceInfoStorage = sourceInfoStorage;
         this.headerInjector = headerInjector;
+        if (!cacheRoot.exists()) cacheRoot.mkdirs();
     }
 
     File generateCacheFile(String url) {
