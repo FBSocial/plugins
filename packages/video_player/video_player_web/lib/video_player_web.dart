@@ -173,6 +173,7 @@ class _VideoPlayer {
       ..src = uri
       ..autoplay = false
       ..controls = false
+      ..style.objectFit = 'cover'
       ..style.border = 'none';
 
     // Allows Safari iOS to play the video inline
