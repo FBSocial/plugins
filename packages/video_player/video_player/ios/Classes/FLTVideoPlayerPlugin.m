@@ -407,7 +407,13 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 }
 
 - (int64_t)duration {
-  return FLTCMTimeToMillis([[_player currentItem] duration]);
+    if ([_player currentItem] == nil) return 0;
+    CMTime t = [[_player currentItem] duration];
+    if ((t.flags & kCMTimeFlags_ImpliedValueFlagsMask) > 0) {
+        return ([[_player currentItem] asset] != nil) ? FLTCMTimeToMillis([[[_player currentItem] asset] duration]) : 0;
+    }else {
+        return FLTCMTimeToMillis([[_player currentItem] duration]);
+    }
 }
 
 - (void)seekTo:(int)location {
