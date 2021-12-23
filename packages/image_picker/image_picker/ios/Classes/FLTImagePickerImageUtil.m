@@ -115,47 +115,48 @@
 + (GIFInfo *)scaledGIFImage:(NSData *)data
                    maxWidth:(NSNumber *)maxWidth
                   maxHeight:(NSNumber *)maxHeight {
-  NSMutableDictionary<NSString *, id> *options = [NSMutableDictionary dictionary];
-  options[(NSString *)kCGImageSourceShouldCache] = @(YES);
-  options[(NSString *)kCGImageSourceTypeIdentifierHint] = (NSString *)kUTTypeGIF;
+    NSMutableDictionary<NSString *, id> *options = [NSMutableDictionary dictionary];
+    options[(NSString *)kCGImageSourceShouldCache] = @(YES);
+    options[(NSString *)kCGImageSourceTypeIdentifierHint] = (NSString *)kUTTypeGIF;
 
-  CGImageSourceRef imageSource =
-      CGImageSourceCreateWithData((CFDataRef)data, (CFDictionaryRef)options);
+    CGImageSourceRef imageSource =
+        CGImageSourceCreateWithData((CFDataRef)data, (CFDictionaryRef)options);
 
-  size_t numberOfFrames = CGImageSourceGetCount(imageSource);
-  NSMutableArray<UIImage *> *images = [NSMutableArray arrayWithCapacity:numberOfFrames];
+    size_t numberOfFrames = CGImageSourceGetCount(imageSource);
+    NSMutableArray<UIImage *> *images = [NSMutableArray arrayWithCapacity:numberOfFrames];
 
-  NSTimeInterval interval = 0.0;
-  for (size_t index = 0; index < numberOfFrames; index++) {
-    CGImageRef imageRef =
-        CGImageSourceCreateImageAtIndex(imageSource, index, (CFDictionaryRef)options);
+    NSTimeInterval interval = 0.0;
+    
+    if (numberOfFrames > 0) {
+        CGImageRef imageRef =
+            CGImageSourceCreateImageAtIndex(imageSource, 0, (CFDictionaryRef)options);
 
-    NSDictionary *properties = (NSDictionary *)CFBridgingRelease(
-        CGImageSourceCopyPropertiesAtIndex(imageSource, index, NULL));
-    NSDictionary *gifProperties = properties[(NSString *)kCGImagePropertyGIFDictionary];
+        NSDictionary *properties = (NSDictionary *)CFBridgingRelease(
+            CGImageSourceCopyPropertiesAtIndex(imageSource, 0, NULL));
+        NSDictionary *gifProperties = properties[(NSString *)kCGImagePropertyGIFDictionary];
 
-    NSNumber *delay = gifProperties[(NSString *)kCGImagePropertyGIFUnclampedDelayTime];
-    if (delay == nil) {
-      delay = gifProperties[(NSString *)kCGImagePropertyGIFDelayTime];
+        NSNumber *delay = gifProperties[(NSString *)kCGImagePropertyGIFUnclampedDelayTime];
+        if (delay == nil) {
+          delay = gifProperties[(NSString *)kCGImagePropertyGIFDelayTime];
+        }
+
+        if (interval == 0.0) {
+          interval = [delay doubleValue];
+        }
+
+        UIImage *image = [UIImage imageWithCGImage:imageRef scale:1.0 orientation:UIImageOrientationUp];
+        image = [self scaledImage:image maxWidth:maxWidth maxHeight:maxHeight isMetadataAvailable:YES];
+
+        [images addObject:image];
+
+        CGImageRelease(imageRef);
     }
+    
+    CFRelease(imageSource);
 
-    if (interval == 0.0) {
-      interval = [delay doubleValue];
-    }
+    GIFInfo *info = [[GIFInfo alloc] initWithImages:images interval:interval];
 
-    UIImage *image = [UIImage imageWithCGImage:imageRef scale:1.0 orientation:UIImageOrientationUp];
-    image = [self scaledImage:image maxWidth:maxWidth maxHeight:maxHeight isMetadataAvailable:YES];
-
-    [images addObject:image];
-
-    CGImageRelease(imageRef);
-  }
-
-  CFRelease(imageSource);
-
-  GIFInfo *info = [[GIFInfo alloc] initWithImages:images interval:interval];
-
-  return info;
+    return info;
 }
 
 @end
