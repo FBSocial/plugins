@@ -86,7 +86,7 @@ typedef void (^GetSavedPath)(NSString *);
             loadObjectOfClass:[UIImage class]
             completionHandler:^(__kindof id<NSItemProviderReading> _Nullable image,
                                 NSError *_Nullable error) {
-              if ([image isKindOfClass:[UIImage class]]) {
+              if (error == nil && [image isKindOfClass:[UIImage class]]) {
                   UIImage *localImage = image;
                   PHAsset *originalAsset =
                       [FLTImagePickerPhotoAssetUtil getAssetFromPHPickerResult:self.result];
@@ -113,13 +113,17 @@ typedef void (^GetSavedPath)(NSString *);
                                      NSData *_Nullable imageData, NSString *_Nullable dataUTI,
                                      UIImageOrientation orientation, NSDictionary *_Nullable info) {
                                    // maxWidth and maxHeight are used only for GIF images.
-                                         NSString *savedPath = [FLTImagePickerPhotoAssetUtil
-                                       saveImageWithOriginalImageData:imageData
-                                                                image:[UIImage imageWithData:imageData]
-                                                             maxWidth:self.maxWidth
-                                                            maxHeight:self.maxHeight
-                                                         imageQuality:self.desiredImageQuality];
-                                         [self completeOperationWithPath:savedPath];
+                                         if (imageData) {
+                                             NSString *savedPath = [FLTImagePickerPhotoAssetUtil
+                                           saveImageWithOriginalImageData:imageData
+                                                                    image:[UIImage imageWithData:imageData]
+                                                                 maxWidth:self.maxWidth
+                                                                maxHeight:self.maxHeight
+                                                             imageQuality:self.desiredImageQuality];
+                                             [self completeOperationWithPath:savedPath];
+                                         }else{
+                                             [self completeOperationWithPath:@""];
+                                         }
                                  }];
               }
             }];
