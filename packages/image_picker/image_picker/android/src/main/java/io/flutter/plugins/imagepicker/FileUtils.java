@@ -27,6 +27,8 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.net.Uri;
 import android.webkit.MimeTypeMap;
+import android.widget.Toast;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -50,15 +52,16 @@ class FileUtils {
         copy(inputStream, outputStream);
         success = true;
       }
-    } catch (IOException ignored) {
+    } catch (Exception ignored) {
+      Toast.makeText(context, "图片读取失败，换一张试试吧", Toast.LENGTH_SHORT).show();
     } finally {
       try {
         if (inputStream != null) inputStream.close();
-      } catch (IOException ignored) {
+      } catch (Exception ignored) {
       }
       try {
         if (outputStream != null) outputStream.close();
-      } catch (IOException ignored) {
+      } catch (Exception ignored) {
         // If closing the output stream fails, we cannot be sure that the
         // target file was written in full. Flushing the stream merely moves
         // the bytes into the OS, not necessarily to the file.
