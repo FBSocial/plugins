@@ -11,7 +11,7 @@
 #import "DVAssetLoaderHelpers.h"
 #import "DVAssetLoaderError.h"
 
-static NSTimeInterval const kDefaultLoadingTimeout = 15;
+static NSTimeInterval const kDefaultLoadingTimeout = 10000;
 
 @interface DVAssetLoaderDelegate () <NSURLSessionDelegate, NSURLSessionDataDelegate> {
     NSString *_cacheFileName;
@@ -58,7 +58,10 @@ static NSTimeInterval const kDefaultLoadingTimeout = 15;
         _fragDataPathDictionary = [NSMutableDictionary new];
         _savedRange = NSMakeRange(0, 0);
         _networkTimeout = kDefaultLoadingTimeout;
-        _session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+        NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+        [config setTimeoutIntervalForResource:kDefaultLoadingTimeout];
+        [config setTimeoutIntervalForRequest:kDefaultLoadingTimeout];
+        _session = [NSURLSession sessionWithConfiguration:config
                                                  delegate:self
                                             delegateQueue:[NSOperationQueue mainQueue]];
     }

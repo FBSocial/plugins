@@ -8,6 +8,7 @@
 #import <GLKit/GLKit.h>
 #import "messages.h"
 #import "DVURLAsset.h"
+#import "Reachability.h"
 
 #if !__has_feature(objc_arc)
 #error Code Requires ARC.
@@ -48,6 +49,9 @@ int64_t FLTCMTimeToMillis(CMTime time) {
 @property(nonatomic, readonly) bool isPlaying;
 @property(nonatomic) bool isLooping;
 @property(nonatomic, readonly) bool isInitialized;
+@property(nonatomic, readonly) bool isloadingNetwork;
+@property (nonatomic, strong) Reachability *hostReachability;
+@property (nonatomic, strong) Reachability *interNetReachability;
 - (instancetype)initWithURL:(NSURL*)url frameUpdater:(FLTFrameUpdater*)frameUpdater;
 - (void)play;
 - (void)pause;
@@ -194,6 +198,49 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     }
 }
 
+- (void)listenNetWorkStatus {
+    // KVO监听，监听kReachabilityChangedNotification的变化
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reachabilityChanged:) name:kReachabilityChangedNotification object:nil];
+    // 初始化 Reachability 当前网络环境
+    self.interNetReachability = [Reachability reachabilityForInternetConnection];
+    // 开始监听
+    [self.interNetReachability startNotifier];
+}
+
+/** 网络环境改变时实现的方法 */
+- (void) reachabilityChanged:(NSNotification *)note {
+    // 当前发送通知的 reachability
+    Reachability *reachability = [note object];
+    // 当前网络环境（在其它需要获取网络连接状态的地方调用 currentReachabilityStatus 方法）
+    NetworkStatus netStatus = [reachability currentReachabilityStatus];
+    // 断言 如果出错则发送错误信息
+    NSParameterAssert([reachability isKindOfClass:[Reachability class]]);
+    // 不同网络的处理方法
+    switch (netStatus) {
+        case NotReachable:
+            NSLog(@"没有网络连接");
+            break;
+        case ReachableViaWiFi:
+            NSLog(@"已连接Wi-Fi");
+            [self playBeforeTime];
+            break;
+        case ReachableViaWWAN:
+            NSLog(@"已连接蜂窝网络");
+            [self playBeforeTime];
+            break;
+        default:
+            break;
+    }
+}
+
+- (void) playBeforeTime {
+    if (_isPlaying && _isloadingNetwork) {
+        CMTime nowTime = _player.currentTime;
+        [_player seekToTime:CMTimeMake(nowTime.value - nowTime.timescale > 0 ? nowTime.value - nowTime.timescale : 0, nowTime.timescale)];
+        [_player play];
+    }
+}
+
 -(BOOL)canCacheVideo {
     NSError *error = nil;
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
@@ -274,6 +321,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 
   [self addObservers:item];
 
+  [self listenNetWorkStatus];
   [asset loadValuesAsynchronouslyForKeys:@[ @"tracks" ] completionHandler:assetCompletionHandler];
 
   return self;
@@ -317,16 +365,19 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     if ([[_player currentItem] isPlaybackLikelyToKeepUp]) {
       [self updatePlayingState];
       if (_eventSink != nil) {
-        _eventSink(@{@"event" : @"bufferingEnd"});
+          _isloadingNetwork = NO;
+          _eventSink(@{@"event" : @"bufferingEnd"});
       }
     }
   } else if (context == playbackBufferEmptyContext) {
     if (_eventSink != nil) {
-      _eventSink(@{@"event" : @"bufferingStart"});
+        _isloadingNetwork = YES;
+        _eventSink(@{@"event" : @"bufferingStart"});
     }
   } else if (context == playbackBufferFullContext) {
     if (_eventSink != nil) {
-      _eventSink(@{@"event" : @"bufferingEnd"});
+        _isloadingNetwork = NO;
+        _eventSink(@{@"event" : @"bufferingEnd"});
     }
   }
 }
@@ -336,7 +387,11 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     return;
   }
   if (_isPlaying) {
-    [_player play];
+      if (_isPlaying && _isloadingNetwork) {
+          [self playBeforeTime];
+      } else {
+          [_player play];
+      }
   } else {
     [_player pause];
   }
