@@ -585,6 +585,34 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
   FLTVideoPlayerPlugin* instance = [[FLTVideoPlayerPlugin alloc] initWithRegistrar:registrar];
   [registrar publish:instance];
   FLTVideoPlayerApiSetup(registrar.messenger, instance);
+  [instance setupHTTPCache];
+}
+
+- (void)configHTTPCache {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+           [self setupHTTPCache];
+    });
+}
+
+- (void)setupHTTPCache {
+    [KTVHTTPCache logSetConsoleLogEnable:NO];
+    NSError *error = nil;
+    [KTVHTTPCache proxyStart:&error];
+    if (error) {
+        NSLog(@"Proxy Start Failure, %@", error);
+    } else {
+        //NSLog(@"Proxy Start Success");
+    }
+    [KTVHTTPCache encodeSetURLConverter:^NSURL *(NSURL *URL) {
+        //NSLog(@"URL Filter reviced URL : %@", URL);
+        return URL;
+    }];
+    [KTVHTTPCache downloadSetUnacceptableContentTypeDisposer:^BOOL(NSURL *URL, NSString *contentType) {
+        //NSLog(@"Unsupport Content-Type Filter reviced URL : %@, %@", URL, contentType);
+        return NO;
+    }];
+    [KTVHTTPCache downloadSetTimeoutInterval:30];
 }
 
 - (instancetype)initWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
