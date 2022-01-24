@@ -9,7 +9,7 @@
 #import "messages.h"
 #import "DVURLAsset.h"
 #import "Reachability.h"
-
+#import <KTVHTTPCache/KTVHTTPCache.h>
 #if !__has_feature(objc_arc)
 #error Code Requires ARC.
 #endif
@@ -177,21 +177,23 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
         NSString *urlString = [url absoluteString];
         urlString = [urlString substringToIndex:[urlString rangeOfComposedCharacterSequenceAtIndex:[urlString length] - [@".cachevideo" length]].location];
         url = [NSURL URLWithString:urlString];
-        if ([self canCacheVideo]) {
-            if ([DVURLAsset isCached:url]) {
-                NSString * cachedPath = [DVURLAsset cachedFilePath:url];
-                AVAsset *asset = [AVAsset assetWithURL:[NSURL URLWithString:[@"file://" stringByAppendingString:cachedPath]]];
-                AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
-                return [self initWithPlayerItem:item frameUpdater:frameUpdater];
-            } else {
-                DVURLAsset *asset = [[DVURLAsset alloc] initWithURL:url options:nil];
-                AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
-                return [self initWithPlayerItem:item frameUpdater:frameUpdater];
-            }
-        }else {
-            AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
+//        if ([self canCacheVideo]) {
+//            if ([DVURLAsset isCached:url]) {
+//                NSString * cachedPath = [DVURLAsset cachedFilePath:url];
+//                AVAsset *asset = [AVAsset assetWithURL:[NSURL URLWithString:[@"file://" stringByAppendingString:cachedPath]]];
+//                AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
+//                return [self initWithPlayerItem:item frameUpdater:frameUpdater];
+//            } else {
+//                DVURLAsset *asset = [[DVURLAsset alloc] initWithURL:url options:nil];
+//                AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
+//                return [self initWithPlayerItem:item frameUpdater:frameUpdater];
+//            }
+//        }else {
+            NSURL *proxyURL = [KTVHTTPCache proxyURLWithOriginalURL:url];
+            
+            AVPlayerItem* item = [AVPlayerItem playerItemWithURL:proxyURL];
             return [self initWithPlayerItem:item frameUpdater:frameUpdater];
-        }
+//        }
     }else {
         AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
         return [self initWithPlayerItem:item frameUpdater:frameUpdater];
