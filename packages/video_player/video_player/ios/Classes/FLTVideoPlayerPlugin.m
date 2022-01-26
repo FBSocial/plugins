@@ -1,6 +1,13 @@
 // Copyright 2017 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+#define weakify(var) __weak typeof(var) weakSelf = var;
+#define strongify(var) \
+_Pragma("clang diagnostic push") \
+_Pragma("clang diagnostic ignored \"-Wshadow\"") \
+__strong typeof(var) var = weakSelf ; \
+_Pragma("clang diagnostic pop")
+
 
 #import "FLTVideoPlayerPlugin.h"
 #import <AVFoundation/AVFoundation.h>
@@ -49,9 +56,7 @@ int64_t FLTCMTimeToMillis(CMTime time) {
 @property(nonatomic, readonly) bool isPlaying;
 @property(nonatomic) bool isLooping;
 @property(nonatomic, readonly) bool isInitialized;
-@property(nonatomic, readonly) bool isloadingNetwork;
-@property (nonatomic, strong) Reachability *hostReachability;
-@property (nonatomic, strong) Reachability *interNetReachability;
+@property (nonatomic, assign) BOOL isBuffering;
 - (instancetype)initWithURL:(NSURL*)url frameUpdater:(FLTFrameUpdater*)frameUpdater;
 - (void)play;
 - (void)pause;
@@ -66,6 +71,7 @@ static void* statusContext = &statusContext;
 static void* playbackLikelyToKeepUpContext = &playbackLikelyToKeepUpContext;
 static void* playbackBufferEmptyContext = &playbackBufferEmptyContext;
 static void* playbackBufferFullContext = &playbackBufferFullContext;
+static void* presentationSizeContext = &presentationSizeContext;
 
 @implementation FLTVideoPlayer
 - (instancetype)initWithAsset:(NSString*)asset frameUpdater:(FLTFrameUpdater*)frameUpdater {
@@ -94,7 +100,10 @@ static void* playbackBufferFullContext = &playbackBufferFullContext;
          forKeyPath:@"playbackBufferFull"
             options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew
             context:playbackBufferFullContext];
-
+    [item addObserver:self
+           forKeyPath:@"presentationSize"
+              options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew
+              context:presentationSizeContext];
   // Add an observer that will respond to itemDidPlayToEndTime
   [[NSNotificationCenter defaultCenter] addObserver:self
                                            selector:@selector(itemDidPlayToEndTime:)
@@ -177,71 +186,61 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
         NSString *urlString = [url absoluteString];
         urlString = [urlString substringToIndex:[urlString rangeOfComposedCharacterSequenceAtIndex:[urlString length] - [@".cachevideo" length]].location];
         url = [NSURL URLWithString:urlString];
-//        if ([self canCacheVideo]) {
-//            if ([DVURLAsset isCached:url]) {
-//                NSString * cachedPath = [DVURLAsset cachedFilePath:url];
-//                AVAsset *asset = [AVAsset assetWithURL:[NSURL URLWithString:[@"file://" stringByAppendingString:cachedPath]]];
-//                AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
-//                return [self initWithPlayerItem:item frameUpdater:frameUpdater];
-//            } else {
-//                DVURLAsset *asset = [[DVURLAsset alloc] initWithURL:url options:nil];
-//                AVPlayerItem* item = [AVPlayerItem playerItemWithAsset:asset];
-//                return [self initWithPlayerItem:item frameUpdater:frameUpdater];
-//            }
-//        }else {
-            NSURL *proxyURL = [KTVHTTPCache proxyURLWithOriginalURL:url];
+        NSURL *proxyURL = [KTVHTTPCache proxyURLWithOriginalURL:url];
             
-            AVPlayerItem* item = [AVPlayerItem playerItemWithURL:proxyURL];
-            return [self initWithPlayerItem:item frameUpdater:frameUpdater];
-//        }
+        KTVHCDataCacheItem *cacheItem = [KTVHTTPCache cacheCacheItemWithURL:url];
+        NSLog(@"cacheItem: %d, %d, %d", cacheItem.cacheLength, cacheItem.totalLength, cacheItem.vaildLength);
+        
+        AVPlayerItem* item = [AVPlayerItem playerItemWithURL:proxyURL];
+        return [self initWithPlayerItem:item frameUpdater:frameUpdater];
     }else {
         AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
         return [self initWithPlayerItem:item frameUpdater:frameUpdater];
     }
 }
-
-- (void)listenNetWorkStatus {
-    // KVO监听，监听kReachabilityChangedNotification的变化
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reachabilityChanged:) name:kReachabilityChangedNotification object:nil];
-    // 初始化 Reachability 当前网络环境
-    self.interNetReachability = [Reachability reachabilityForInternetConnection];
-    // 开始监听
-    [self.interNetReachability startNotifier];
-}
-
-/** 网络环境改变时实现的方法 */
-- (void) reachabilityChanged:(NSNotification *)note {
-    // 当前发送通知的 reachability
-    Reachability *reachability = [note object];
-    // 当前网络环境（在其它需要获取网络连接状态的地方调用 currentReachabilityStatus 方法）
-    NetworkStatus netStatus = [reachability currentReachabilityStatus];
-    // 断言 如果出错则发送错误信息
-    NSParameterAssert([reachability isKindOfClass:[Reachability class]]);
-    // 不同网络的处理方法
-    switch (netStatus) {
-        case NotReachable:
-            NSLog(@"没有网络连接");
-            break;
-        case ReachableViaWiFi:
-            NSLog(@"已连接Wi-Fi");
-            [self playBeforeTime];
-            break;
-        case ReachableViaWWAN:
-            NSLog(@"已连接蜂窝网络");
-            [self playBeforeTime];
-            break;
-        default:
-            break;
-    }
-}
-
-- (void) playBeforeTime {
-    if (_isPlaying && _isloadingNetwork) {
-        CMTime nowTime = _player.currentTime;
-        [_player seekToTime:CMTimeMake(nowTime.value - nowTime.timescale > 0 ? nowTime.value - nowTime.timescale : 0, nowTime.timescale)];
-        [_player play];
-    }
-}
+//
+//- (void)listenNetWorkStatus {
+//    // KVO监听，监听kReachabilityChangedNotification的变化
+//    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reachabilityChanged:) name:kReachabilityChangedNotification object:nil];
+//    // 初始化 Reachability 当前网络环境
+//    self.interNetReachability = [Reachability reachabilityForInternetConnection];
+//    // 开始监听
+//    [self.interNetReachability startNotifier];
+//}
+//
+///** 网络环境改变时实现的方法 */
+//- (void) reachabilityChanged:(NSNotification *)note {
+//    // 当前发送通知的 reachability
+//    Reachability *reachability = [note object];
+//    // 当前网络环境（在其它需要获取网络连接状态的地方调用 currentReachabilityStatus 方法）
+//    NetworkStatus netStatus = [reachability currentReachabilityStatus];
+//    // 断言 如果出错则发送错误信息
+//    NSParameterAssert([reachability isKindOfClass:[Reachability class]]);
+//    // 不同网络的处理方法
+//    switch (netStatus) {
+//        case NotReachable:
+//            NSLog(@"没有网络连接");
+//            break;
+//        case ReachableViaWiFi:
+//            NSLog(@"已连接Wi-Fi");
+//            [self playBeforeTime];
+//            break;
+//        case ReachableViaWWAN:
+//            NSLog(@"已连接蜂窝网络");
+//            [self playBeforeTime];
+//            break;
+//        default:
+//            break;
+//    }
+//}
+//
+//- (void) playBeforeTime {
+//    if (_isPlaying && _isloadingNetwork) {
+//        CMTime nowTime = _player.currentTime;
+//        [_player seekToTime:CMTimeMake(nowTime.value - nowTime.timescale > 0 ? nowTime.value - nowTime.timescale : 0, nowTime.timescale)];
+//        [_player play];
+//    }
+//}
 
 -(BOOL)canCacheVideo {
     NSError *error = nil;
@@ -281,58 +280,97 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 }
 
 - (instancetype)initWithPlayerItem:(AVPlayerItem*)item frameUpdater:(FLTFrameUpdater*)frameUpdater {
-  self = [super init];
-  NSAssert(self, @"super init cannot be nil");
-  _isInitialized = false;
-  _isPlaying = false;
-  _disposed = false;
+    self = [super init];
+    NSAssert(self, @"super init cannot be nil");
+    _isInitialized = false;
+    _isPlaying = false;
+    _disposed = false;
 
-  AVAsset* asset = [item asset];
-  void (^assetCompletionHandler)(void) = ^{
-    if ([asset statusOfValueForKey:@"tracks" error:nil] == AVKeyValueStatusLoaded) {
-      NSArray* tracks = [asset tracksWithMediaType:AVMediaTypeVideo];
-      if ([tracks count] > 0) {
-        AVAssetTrack* videoTrack = tracks[0];
-        void (^trackCompletionHandler)(void) = ^{
-          if (self->_disposed) return;
-          if ([videoTrack statusOfValueForKey:@"preferredTransform"
-                                        error:nil] == AVKeyValueStatusLoaded) {
-            // Rotate the video by using a videoComposition and the preferredTransform
-            self->_preferredTransform = [self fixTransform:videoTrack];
-            // Note:
-            // https://developer.apple.com/documentation/avfoundation/avplayeritem/1388818-videocomposition
-            // Video composition can only be used with file-based media and is not supported for
-            // use with media served using HTTP Live Streaming.
-            AVMutableVideoComposition* videoComposition =
-                [self getVideoCompositionWithTransform:self->_preferredTransform
-                                             withAsset:asset
-                                        withVideoTrack:videoTrack];
-            item.videoComposition = videoComposition;
-          }
-        };
-        [videoTrack loadValuesAsynchronouslyForKeys:@[ @"preferredTransform" ]
-                                  completionHandler:trackCompletionHandler];
-      }
-    }
-  };
+    _player = [AVPlayer playerWithPlayerItem:item];
+    _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
 
-  _player = [AVPlayer playerWithPlayerItem:item];
-  _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
-
-  [self createVideoOutputAndDisplayLink:frameUpdater];
-
-  [self addObservers:item];
-
-  [self listenNetWorkStatus];
-  [asset loadValuesAsynchronouslyForKeys:@[ @"tracks" ] completionHandler:assetCompletionHandler];
-
-  return self;
+    [self createVideoOutputAndDisplayLink:frameUpdater];
+    [self addObservers:item];
+    [self listenTracks];
+    return self;
 }
+
+-(void)listenTracks{
+    weakify(self);
+    [[self.player.currentItem asset] loadValuesAsynchronouslyForKeys:@[ @"tracks" ] completionHandler:^(){
+        strongify(self);
+        NSError *error = nil;
+        AVKeyValueStatus status = [self.player.currentItem.asset statusOfValueForKey:@"tracks" error:&error];
+        if(error) return;
+        
+        if (status == AVKeyValueStatusLoaded) {
+            NSArray* tracks = [self.player.currentItem.asset tracksWithMediaType:AVMediaTypeVideo];
+            if ([tracks count] > 0) {
+                AVAssetTrack* videoTrack = tracks[0];
+                weakify(self);
+                [videoTrack loadValuesAsynchronouslyForKeys:@[ @"preferredTransform" ]
+                                      completionHandler:^(){
+                strongify(self);
+                if (self->_disposed) return;
+                if ([videoTrack statusOfValueForKey:@"preferredTransform"
+                                              error:nil] == AVKeyValueStatusLoaded) {
+                    // Rotate the video by using a videoComposition and the preferredTransform
+                    self->_preferredTransform = [self fixTransform:videoTrack];
+                    // Note:
+                    // https://developer.apple.com/documentation/avfoundation/avplayeritem/1388818-videocomposition
+                    // Video composition can only be used with file-based media and is not supported for
+                    // use with media served using HTTP Live Streaming.
+                    AVMutableVideoComposition* videoComposition = [self getVideoCompositionWithTransform:self->_preferredTransform
+                                                   withAsset:[self.player.currentItem asset]
+                                              withVideoTrack:videoTrack];
+                    self.player.currentItem.videoComposition = videoComposition;
+                }
+            }];
+          }
+        }else if (status == AVKeyValueStatusFailed) {
+            
+        }
+    }];
+}
+
+-(void)notifyEventSink:(id)content{
+    if(!_eventSink) return;
+    _eventSink(content);
+}
+
+/**
+ *  缓冲较差时候回调这里
+ */
+//- (void)bufferingSomeSecond {
+//    // playbackBufferEmpty会反复进入，因此在bufferingOneSecond延时播放执行完之前再调用bufferingSomeSecond都忽略
+//    if (self.isBuffering) return;
+//
+//    ///to do 没有网络
+//
+//    self.isBuffering = YES;
+//
+//    // 需要先暂停一小会之后再播放，否则网络状况不好的时候时间在走，声音播放不出来
+//    [self.player pause];
+//    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+//        // 如果此时用户已经暂停了，则不再需要开启播放了
+//        if (!self.isPlaying) {
+//            self.isBuffering = NO;
+//            return;
+//        }
+//        [self play];
+//        // 如果执行了play还是没有播放则说明还没有缓存好，则再次缓存一段时间
+//        self.isBuffering = NO;
+//        if (!self.player.currentItem.isPlaybackLikelyToKeepUp) [self bufferingSomeSecond];
+//    });
+//}
+
 
 - (void)observeValueForKeyPath:(NSString*)path
                       ofObject:(id)object
                         change:(NSDictionary*)change
                        context:(void*)context {
+    NSLog(@"observeValueForKeyPath: %@", path);
+    
   if (context == timeRangeContext) {
     if (_eventSink != nil) {
       NSMutableArray<NSArray<NSNumber*>*>* values = [[NSMutableArray alloc] init];
@@ -347,13 +385,10 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     AVPlayerItem* item = (AVPlayerItem*)object;
     switch (item.status) {
       case AVPlayerItemStatusFailed:
-        if (_eventSink != nil) {
-          _eventSink([FlutterError
-              errorWithCode:@"VideoError"
-                    message:[@"Failed to load video: "
-                                stringByAppendingString:[item.error localizedDescription]]
-                    details:nil]);
-        }
+        [self notifyEventSink:[FlutterError
+                               errorWithCode:@"VideoError"
+                               message:[@"Failed to load video: "stringByAppendingString:[item.error localizedDescription]]
+                               details:nil]];
         break;
       case AVPlayerItemStatusUnknown:
         break;
@@ -364,23 +399,20 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
         break;
     }
   } else if (context == playbackLikelyToKeepUpContext) {
+      // When the buffer is good
     if ([[_player currentItem] isPlaybackLikelyToKeepUp]) {
       [self updatePlayingState];
-      if (_eventSink != nil) {
-          _isloadingNetwork = NO;
-          _eventSink(@{@"event" : @"bufferingEnd"});
-      }
+        [self notifyEventSink:@{@"event" : @"bufferingEnd"} ];
     }
   } else if (context == playbackBufferEmptyContext) {
-    if (_eventSink != nil) {
-        _isloadingNetwork = YES;
-        _eventSink(@{@"event" : @"bufferingStart"});
-    }
+      // When the buffer is empty
+      [self notifyEventSink: @{@"event" : @"bufferingStart"}];
   } else if (context == playbackBufferFullContext) {
-    if (_eventSink != nil) {
-        _isloadingNetwork = NO;
-        _eventSink(@{@"event" : @"bufferingEnd"});
-    }
+      [self notifyEventSink:@{@"event" : @"bufferingEnd"}];
+  }else if(context == presentationSizeContext){
+     //CGSize size  = self.player.currentItem.presentationSize;
+  } else {
+      [super observeValueForKeyPath:path ofObject:object change:change context:context];
   }
 }
 
@@ -389,11 +421,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     return;
   }
   if (_isPlaying) {
-      if (_isPlaying && _isloadingNetwork) {
-          [self playBeforeTime];
-      } else {
-          [_player play];
-      }
+      [_player play];
   } else {
     [_player pause];
   }
@@ -409,6 +437,14 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
         if ([urlAsset URL]) {
             url = [[(AVURLAsset *)[[_player currentItem] asset] URL] absoluteString];
         }
+        //test
+//        _isInitialized = true;
+//        _eventSink(@{
+//          @"event" : @"initialized",
+//          @"duration" : @(1),
+//          @"width" : @(1),
+//          @"height" : @(1),
+//        });
     }
     if ([[url lowercaseString] containsString:@".m3u8"] && _eventSink && !_isInitialized) {
         CGSize size = _renderSize;
@@ -540,6 +576,8 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
   // 'AVPlayerItemStatusReadyToPlay' fires before _eventSink is set (this function
   // onListenWithArguments is called)
   [self sendInitialized];
+    
+   
   return nil;
 }
 
@@ -562,6 +600,9 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
   [[_player currentItem] removeObserver:self
                              forKeyPath:@"playbackBufferFull"
                                 context:playbackBufferFullContext];
+    [[_player currentItem] removeObserver:self
+                               forKeyPath:@"presentationSize"
+                                  context:presentationSizeContext];
   [_player replaceCurrentItemWithPlayerItem:nil];
   [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
@@ -596,23 +637,24 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 }
 
 - (void)setupHTTPCache {
-    [KTVHTTPCache logSetConsoleLogEnable:NO];
+    [KTVHTTPCache logSetConsoleLogEnable:YES];
     NSError *error = nil;
     [KTVHTTPCache proxyStart:&error];
     if (error) {
         NSLog(@"Proxy Start Failure, %@", error);
     } else {
-        //NSLog(@"Proxy Start Success");
+        NSLog(@"Proxy Start Success");
     }
     [KTVHTTPCache encodeSetURLConverter:^NSURL *(NSURL *URL) {
-        //NSLog(@"URL Filter reviced URL : %@", URL);
+        NSLog(@"URL Filter reviced URL : %@", URL);
         return URL;
     }];
     [KTVHTTPCache downloadSetUnacceptableContentTypeDisposer:^BOOL(NSURL *URL, NSString *contentType) {
-        //NSLog(@"Unsupport Content-Type Filter reviced URL : %@, %@", URL, contentType);
+        NSLog(@"Unsupport Content-Type Filter reviced URL : %@, %@", URL, contentType);
         return NO;
     }];
-    [KTVHTTPCache downloadSetTimeoutInterval:30];
+//    [KTVHTTPCache downloadSetTimeoutInterval:30];
+    [KTVHTTPCache cacheSetMaxCacheLength:2000 * 1024 * 1024];
 }
 
 - (instancetype)initWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {

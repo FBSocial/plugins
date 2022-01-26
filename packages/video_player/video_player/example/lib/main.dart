@@ -228,9 +228,17 @@ class _BumbleBeeRemoteVideoState extends State<_BumbleBeeRemoteVideo> {
   void initState() {
     super.initState();
 
-    final url =
-        "https://fb-cdn.fanbook.mobi/fanbook/app/files/chatroom/video/912ac8ce696edb5280fb353a5c776082.mp4.cachevideo";
+    // final url =
+    //     "https://fb-cdn.fanbook.mobi/fanbook/app/files/chatroom/video/912ac8ce696edb5280fb353a5c776082.mp4.cachevideo";
     // "http://fb-cdn.fanbook.mobi/fanbook/download/tmp/output.mp4.cachevideo";
+
+    // 央视直播流
+    // final url =
+    //     "http://cctvalih5ca.v.myalicdn.com/live/cctv1_2/index.m3u8";
+    //长视频
+    final url =
+        "http://fb-cdn.fanbook.mobi/fanbook/download/tmp/output.mp4.cachevideo";
+
     _controller = VideoPlayerController.network(
       url,
       closedCaptionFile: _loadCaptions(),
