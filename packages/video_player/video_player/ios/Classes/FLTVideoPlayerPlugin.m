@@ -46,6 +46,13 @@ int64_t FLTCMTimeToMillis(CMTime time) {
 @end
 
 @interface FLTVideoPlayer : NSObject <FlutterTexture, FlutterStreamHandler>
+{
+    id _timeObserver;
+    
+    id _itemEndObserver;
+    id _itemFailedObserver;
+    id _itemStalledObserver;
+}
 @property(readonly, nonatomic) AVPlayer* player;
 @property(readonly, nonatomic) AVPlayerItemVideoOutput* videoOutput;
 @property(readonly, nonatomic) CADisplayLink* displayLink;
@@ -57,6 +64,8 @@ int64_t FLTCMTimeToMillis(CMTime time) {
 @property(nonatomic) bool isLooping;
 @property(nonatomic, readonly) bool isInitialized;
 @property (nonatomic, assign) BOOL isBuffering;
+@property (nonatomic, assign) BOOL isReadyToPlay;
+
 - (instancetype)initWithURL:(NSURL*)url frameUpdater:(FLTFrameUpdater*)frameUpdater;
 - (void)play;
 - (void)pause;
@@ -72,6 +81,7 @@ static void* playbackLikelyToKeepUpContext = &playbackLikelyToKeepUpContext;
 static void* playbackBufferEmptyContext = &playbackBufferEmptyContext;
 static void* playbackBufferFullContext = &playbackBufferFullContext;
 static void* presentationSizeContext = &presentationSizeContext;
+static void *durationContext = &durationContext;
 
 @implementation FLTVideoPlayer
 - (instancetype)initWithAsset:(NSString*)asset frameUpdater:(FLTFrameUpdater*)frameUpdater {
@@ -80,23 +90,23 @@ static void* presentationSizeContext = &presentationSizeContext;
 }
 
 - (void)addObservers:(AVPlayerItem*)item {
-  [item addObserver:self
+    [item addObserver:self
          forKeyPath:@"loadedTimeRanges"
             options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew
             context:timeRangeContext];
-  [item addObserver:self
+    [item addObserver:self
          forKeyPath:@"status"
             options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew
             context:statusContext];
-  [item addObserver:self
+    [item addObserver:self
          forKeyPath:@"playbackLikelyToKeepUp"
             options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew
             context:playbackLikelyToKeepUpContext];
-  [item addObserver:self
+    [item addObserver:self
          forKeyPath:@"playbackBufferEmpty"
             options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew
             context:playbackBufferEmptyContext];
-  [item addObserver:self
+    [item addObserver:self
          forKeyPath:@"playbackBufferFull"
             options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew
             context:playbackBufferFullContext];
@@ -104,22 +114,51 @@ static void* presentationSizeContext = &presentationSizeContext;
            forKeyPath:@"presentationSize"
               options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew
               context:presentationSizeContext];
-  // Add an observer that will respond to itemDidPlayToEndTime
-  [[NSNotificationCenter defaultCenter] addObserver:self
-                                           selector:@selector(itemDidPlayToEndTime:)
-                                               name:AVPlayerItemDidPlayToEndTimeNotification
-                                             object:item];
-}
-
-- (void)itemDidPlayToEndTime:(NSNotification*)notification {
-  if (_isLooping) {
-    AVPlayerItem* p = [notification object];
-    [p seekToTime:kCMTimeZero completionHandler:nil];
-  } else {
-    if (_eventSink) {
-      _eventSink(@{@"event" : @"completed"});
-    }
-  }
+    [item addObserver:self
+           forKeyPath:@"duration"
+              options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew
+              context:durationContext];
+    
+    weakify(self);
+//    CMTime interval = CMTimeMakeWithSeconds(0.1, NSEC_PER_SEC);
+//    _timeObserver = [self.player addPeriodicTimeObserverForInterval:interval queue:dispatch_get_main_queue() usingBlock:^(CMTime time) {
+//        strongify(self)
+//        if (!self) return;
+//        NSArray *loadedRanges = self.player.currentItem.seekableTimeRanges;
+//        /// 大于0才把状态改为可以播放，解决黑屏问题
+//        /// todo 在这个时候再去通知flutter 初始化成功
+//        if (CMTimeGetSeconds(time) > 0 && !self.isReadyToPlay) {
+//            self.isReadyToPlay = YES;
+//            //
+//        }
+//    }];
+    
+    //播放结束通知
+    _itemEndObserver = [[NSNotificationCenter defaultCenter] addObserverForName:AVPlayerItemDidPlayToEndTimeNotification object:item queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) {
+        strongify(self);
+        if (!self) return;
+        if (self.isLooping) {
+            AVPlayerItem* p = [note object];
+            [p seekToTime:kCMTimeZero completionHandler:nil];
+        } else {
+            [self notifyEventSink:@{@"event" : @"completed"}];
+        }
+    }];
+    //播放失败
+    _itemFailedObserver = [[NSNotificationCenter defaultCenter] addObserverForName:AVPlayerItemFailedToPlayToEndTimeNotification object:item queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) {
+        strongify(self);
+        if (!self) return;
+        NSError * error = note.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey];
+        NSLog(@"AVPlayerItemFailedToPlayToEndTimeNotification:播放失败 %@",error);
+    }];
+    
+    //异常中断 当发生卡顿
+    _itemStalledObserver = [[NSNotificationCenter defaultCenter] addObserverForName:AVPlayerItemPlaybackStalledNotification object:item queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) {
+        strongify(self);
+        if (!self) return;
+        NSLog(@"AVPlayerItemPlaybackStalledNotification:异常中断 %@", note);
+        if (self.isPlaying) [self.player play];
+    }];
 }
 
 static inline CGFloat radiansToDegrees(CGFloat radians) {
@@ -182,21 +221,21 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 }
 
 - (instancetype)initWithURL:(NSURL*)url frameUpdater:(FLTFrameUpdater*)frameUpdater {
-    if (url != nil && [url pathExtension] != nil && [[url scheme] hasPrefix:@"http"] && [[[url pathExtension] lowercaseString] isEqualToString:@"cachevideo"]) {
+    if (url != nil && [url pathExtension] != nil && [[url scheme] hasPrefix:@"http"] && [[[url pathExtension] lowercaseString] isEqualToString:@"cachevideo"] && [self canCacheVideo]) {
         NSString *urlString = [url absoluteString];
         urlString = [urlString substringToIndex:[urlString rangeOfComposedCharacterSequenceAtIndex:[urlString length] - [@".cachevideo" length]].location];
         url = [NSURL URLWithString:urlString];
         NSURL *proxyURL = [KTVHTTPCache proxyURLWithOriginalURL:url];
             
-        KTVHCDataCacheItem *cacheItem = [KTVHTTPCache cacheCacheItemWithURL:url];
-        NSLog(@"cacheItem: %d, %d, %d", cacheItem.cacheLength, cacheItem.totalLength, cacheItem.vaildLength);
+//        KTVHCDataCacheItem *cacheItem = [KTVHTTPCache cacheCacheItemWithURL:url];
+//        NSLog(@"cacheItem: %d, %d, %d", cacheItem.cacheLength, cacheItem.totalLength, cacheItem.vaildLength);
         
         AVPlayerItem* item = [AVPlayerItem playerItemWithURL:proxyURL];
         return [self initWithPlayerItem:item frameUpdater:frameUpdater];
-    }else {
-        AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
-        return [self initWithPlayerItem:item frameUpdater:frameUpdater];
     }
+    
+    AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
+    return [self initWithPlayerItem:item frameUpdater:frameUpdater];
 }
 //
 //- (void)listenNetWorkStatus {
@@ -288,7 +327,14 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 
     _player = [AVPlayer playerWithPlayerItem:item];
     _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
-
+    if (@available(iOS 9.0, *)) {
+        item.canUseNetworkResourcesForLiveStreamingWhilePaused = NO;
+    }
+    if (@available(iOS 10.0, *)) {
+        item.preferredForwardBufferDuration = 1;
+        _player.automaticallyWaitsToMinimizeStalling = NO;
+    }
+    
     [self createVideoOutputAndDisplayLink:frameUpdater];
     [self addObservers:item];
     [self listenTracks];
@@ -369,7 +415,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
                       ofObject:(id)object
                         change:(NSDictionary*)change
                        context:(void*)context {
-    NSLog(@"observeValueForKeyPath: %@", path);
+//    NSLog(@"observeValueForKeyPath: %@", path);
     
   if (context == timeRangeContext) {
     if (_eventSink != nil) {
@@ -401,7 +447,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
   } else if (context == playbackLikelyToKeepUpContext) {
       // When the buffer is good
     if ([[_player currentItem] isPlaybackLikelyToKeepUp]) {
-      [self updatePlayingState];
+        [self updatePlayingState];
         [self notifyEventSink:@{@"event" : @"bufferingEnd"} ];
     }
   } else if (context == playbackBufferEmptyContext) {
@@ -409,9 +455,16 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
       [self notifyEventSink: @{@"event" : @"bufferingStart"}];
   } else if (context == playbackBufferFullContext) {
       [self notifyEventSink:@{@"event" : @"bufferingEnd"}];
-  }else if(context == presentationSizeContext){
-     //CGSize size  = self.player.currentItem.presentationSize;
-  } else {
+  } else if (context == presentationSizeContext || context == durationContext) {
+      AVPlayerItem *item = (AVPlayerItem *)object;
+      if (item.status == AVPlayerItemStatusReadyToPlay) {
+        // Due to an apparent bug, when the player item is ready, it still may not have determined
+        // its presentation size or duration. When these properties are finally set, re-check if
+        // all required properties and instantiate the event sink if it is not already set up.
+        [self sendInitialized];
+        [self updatePlayingState];
+      }
+    } else {
       [super observeValueForKeyPath:path ofObject:object change:change context:context];
   }
 }
@@ -460,7 +513,10 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
           @"width" : @(width),
           @"height" : @(height)
         });
-    }else if (_eventSink && !_isInitialized && !CGSizeEqualToSize(_renderSize, CGSizeZero)) { //
+        return;
+    }
+    
+    if (_eventSink && !_isInitialized && !CGSizeEqualToSize(_renderSize, CGSizeZero)) { //
         CGSize size = _renderSize;
           
         CGFloat width = size.width;
@@ -471,7 +527,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
           return;
         }
         // The player may be initialized but still needs to determine the duration.
-    //     if ([self duration] == 0) {
+    //     if ([self duration] == 0) {  ??
     //       return;
     //     }
 
@@ -585,26 +641,27 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 /// is useful for the case where the Engine is in the process of deconstruction
 /// so the channel is going to die or is already dead.
 - (void)disposeSansEventChannel {
-  _disposed = true;
-  [_displayLink invalidate];
-  [[_player currentItem] removeObserver:self forKeyPath:@"status" context:statusContext];
-  [[_player currentItem] removeObserver:self
-                             forKeyPath:@"loadedTimeRanges"
-                                context:timeRangeContext];
-  [[_player currentItem] removeObserver:self
-                             forKeyPath:@"playbackLikelyToKeepUp"
-                                context:playbackLikelyToKeepUpContext];
-  [[_player currentItem] removeObserver:self
-                             forKeyPath:@"playbackBufferEmpty"
-                                context:playbackBufferEmptyContext];
-  [[_player currentItem] removeObserver:self
-                             forKeyPath:@"playbackBufferFull"
-                                context:playbackBufferFullContext];
-    [[_player currentItem] removeObserver:self
-                               forKeyPath:@"presentationSize"
-                                  context:presentationSizeContext];
-  [_player replaceCurrentItemWithPlayerItem:nil];
-  [[NSNotificationCenter defaultCenter] removeObserver:self];
+    _disposed = true;
+    [_displayLink invalidate];
+    AVPlayerItem *currentItem = self.player.currentItem;
+    [currentItem removeObserver:self forKeyPath:@"status" context:statusContext];
+    [currentItem removeObserver:self forKeyPath:@"loadedTimeRanges" context:timeRangeContext];
+    [currentItem removeObserver:self forKeyPath:@"playbackLikelyToKeepUp" context:playbackLikelyToKeepUpContext];
+    [currentItem removeObserver:self forKeyPath:@"playbackBufferEmpty" context:playbackBufferEmptyContext];
+    [currentItem removeObserver:self forKeyPath:@"playbackBufferFull" context:playbackBufferFullContext];
+    [currentItem removeObserver:self forKeyPath:@"presentationSize" context:presentationSizeContext];
+    [currentItem removeObserver:self forKeyPath:@"duration" context:durationContext];
+    
+    [[NSNotificationCenter defaultCenter] removeObserver:_itemEndObserver name:AVPlayerItemDidPlayToEndTimeNotification object:currentItem];
+    _itemEndObserver = nil;
+    [[NSNotificationCenter defaultCenter] removeObserver:_itemFailedObserver name:AVPlayerItemFailedToPlayToEndTimeNotification object:currentItem];
+    _itemFailedObserver = nil;
+    [[NSNotificationCenter defaultCenter] removeObserver:_itemStalledObserver name:AVPlayerItemPlaybackStalledNotification object:currentItem];
+    _itemStalledObserver = nil;
+    
+    [_player replaceCurrentItemWithPlayerItem:nil];
+//    [_player removeTimeObserver:_timeObserver];
+//    _timeObserver = nil;
 }
 
 - (void)dispose {
@@ -632,7 +689,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 - (void)configHTTPCache {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-           [self setupHTTPCache];
+        [self setupHTTPCache];
     });
 }
 
@@ -643,14 +700,14 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     if (error) {
         NSLog(@"Proxy Start Failure, %@", error);
     } else {
-        NSLog(@"Proxy Start Success");
+        //NSLog(@"Proxy Start Success");
     }
     [KTVHTTPCache encodeSetURLConverter:^NSURL *(NSURL *URL) {
-        NSLog(@"URL Filter reviced URL : %@", URL);
+        //NSLog(@"URL Filter reviced URL : %@", URL);
         return URL;
     }];
     [KTVHTTPCache downloadSetUnacceptableContentTypeDisposer:^BOOL(NSURL *URL, NSString *contentType) {
-        NSLog(@"Unsupport Content-Type Filter reviced URL : %@, %@", URL, contentType);
+        //NSLog(@"Unsupport Content-Type Filter reviced URL : %@, %@", URL, contentType);
         return NO;
     }];
 //    [KTVHTTPCache downloadSetTimeoutInterval:30];
