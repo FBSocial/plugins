@@ -221,15 +221,12 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 }
 
 - (instancetype)initWithURL:(NSURL*)url frameUpdater:(FLTFrameUpdater*)frameUpdater {
-    if (url != nil && [url pathExtension] != nil && [[url scheme] hasPrefix:@"http"] && [[[url pathExtension] lowercaseString] isEqualToString:@"cachevideo"] && [self canCacheVideo]) {
+    if (url != nil && [url pathExtension] != nil && [[url scheme] hasPrefix:@"http"] && [[[url pathExtension] lowercaseString] isEqualToString:@"cachevideo"] && [self canCacheVideo] && KTVHTTPCache.proxyIsRunning) {
         NSString *urlString = [url absoluteString];
         urlString = [urlString substringToIndex:[urlString rangeOfComposedCharacterSequenceAtIndex:[urlString length] - [@".cachevideo" length]].location];
         url = [NSURL URLWithString:urlString];
         NSURL *proxyURL = [KTVHTTPCache proxyURLWithOriginalURL:url];
             
-//        KTVHCDataCacheItem *cacheItem = [KTVHTTPCache cacheCacheItemWithURL:url];
-//        NSLog(@"cacheItem: %d, %d, %d", cacheItem.cacheLength, cacheItem.totalLength, cacheItem.vaildLength);
-        
         AVPlayerItem* item = [AVPlayerItem playerItemWithURL:proxyURL];
         return [self initWithPlayerItem:item frameUpdater:frameUpdater];
     }
