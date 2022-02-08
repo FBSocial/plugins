@@ -329,7 +329,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     }
     if (@available(iOS 10.0, *)) {
         item.preferredForwardBufferDuration = 1;
-        _player.automaticallyWaitsToMinimizeStalling = NO;
+        _player.automaticallyWaitsToMinimizeStalling = YES;
     }
     
     [self createVideoOutputAndDisplayLink:frameUpdater];

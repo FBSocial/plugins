@@ -228,8 +228,8 @@ class _BumbleBeeRemoteVideoState extends State<_BumbleBeeRemoteVideo> {
   void initState() {
     super.initState();
 
-    final url =
-        "https://fb-cdn.fanbook.mobi/fanbook/app/files/chatroom/video/912ac8ce696edb5280fb353a5c776082.mp4.cachevideo";
+    // final url =
+    //     "https://fb-cdn.fanbook.mobi/fanbook/app/files/chatroom/video/912ac8ce696edb5280fb353a5c776082.mp4.cachevideo";
     // "http://fb-cdn.fanbook.mobi/fanbook/download/tmp/output.mp4.cachevideo";
 
     // 央视直播流
@@ -238,6 +238,8 @@ class _BumbleBeeRemoteVideoState extends State<_BumbleBeeRemoteVideo> {
     //长视频
     // final url =
     //     "http://fb-cdn.fanbook.mobi/fanbook/download/tmp/output.mp4.cachevideo";
+    final url =
+        "https://fanbookvideonewtest-1251001060.file.myqcloud.com/fanbook/app/files/chatroom/video/1645cc955e33476b42dccf59caea83d1.mp4.cachevideo";
     _controller = VideoPlayerController.network(
       url,
       closedCaptionFile: _loadCaptions(),
