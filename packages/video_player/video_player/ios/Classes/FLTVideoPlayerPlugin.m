@@ -691,7 +691,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 }
 
 - (void)setupHTTPCache {
-    [KTVHTTPCache logSetConsoleLogEnable:YES];
+    [KTVHTTPCache logSetConsoleLogEnable:NO];
     NSError *error = nil;
     [KTVHTTPCache proxyStart:&error];
     if (error) {
