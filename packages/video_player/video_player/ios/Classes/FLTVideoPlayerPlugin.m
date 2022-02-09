@@ -120,19 +120,6 @@ static void *durationContext = &durationContext;
               context:durationContext];
     
     weakify(self);
-//    CMTime interval = CMTimeMakeWithSeconds(0.1, NSEC_PER_SEC);
-//    _timeObserver = [self.player addPeriodicTimeObserverForInterval:interval queue:dispatch_get_main_queue() usingBlock:^(CMTime time) {
-//        strongify(self)
-//        if (!self) return;
-//        NSArray *loadedRanges = self.player.currentItem.seekableTimeRanges;
-//        /// 大于0才把状态改为可以播放，解决黑屏问题
-//        /// todo 在这个时候再去通知flutter 初始化成功
-//        if (CMTimeGetSeconds(time) > 0 && !self.isReadyToPlay) {
-//            self.isReadyToPlay = YES;
-//            //
-//        }
-//    }];
-    
     //播放结束通知
     _itemEndObserver = [[NSNotificationCenter defaultCenter] addObserverForName:AVPlayerItemDidPlayToEndTimeNotification object:item queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) {
         strongify(self);
@@ -234,49 +221,6 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
     return [self initWithPlayerItem:item frameUpdater:frameUpdater];
 }
-//
-//- (void)listenNetWorkStatus {
-//    // KVO监听，监听kReachabilityChangedNotification的变化
-//    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reachabilityChanged:) name:kReachabilityChangedNotification object:nil];
-//    // 初始化 Reachability 当前网络环境
-//    self.interNetReachability = [Reachability reachabilityForInternetConnection];
-//    // 开始监听
-//    [self.interNetReachability startNotifier];
-//}
-//
-///** 网络环境改变时实现的方法 */
-//- (void) reachabilityChanged:(NSNotification *)note {
-//    // 当前发送通知的 reachability
-//    Reachability *reachability = [note object];
-//    // 当前网络环境（在其它需要获取网络连接状态的地方调用 currentReachabilityStatus 方法）
-//    NetworkStatus netStatus = [reachability currentReachabilityStatus];
-//    // 断言 如果出错则发送错误信息
-//    NSParameterAssert([reachability isKindOfClass:[Reachability class]]);
-//    // 不同网络的处理方法
-//    switch (netStatus) {
-//        case NotReachable:
-//            NSLog(@"没有网络连接");
-//            break;
-//        case ReachableViaWiFi:
-//            NSLog(@"已连接Wi-Fi");
-//            [self playBeforeTime];
-//            break;
-//        case ReachableViaWWAN:
-//            NSLog(@"已连接蜂窝网络");
-//            [self playBeforeTime];
-//            break;
-//        default:
-//            break;
-//    }
-//}
-//
-//- (void) playBeforeTime {
-//    if (_isPlaying && _isloadingNetwork) {
-//        CMTime nowTime = _player.currentTime;
-//        [_player seekToTime:CMTimeMake(nowTime.value - nowTime.timescale > 0 ? nowTime.value - nowTime.timescale : 0, nowTime.timescale)];
-//        [_player play];
-//    }
-//}
 
 -(BOOL)canCacheVideo {
     NSError *error = nil;
@@ -381,33 +325,6 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     _eventSink(content);
 }
 
-/**
- *  缓冲较差时候回调这里
- */
-//- (void)bufferingSomeSecond {
-//    // playbackBufferEmpty会反复进入，因此在bufferingOneSecond延时播放执行完之前再调用bufferingSomeSecond都忽略
-//    if (self.isBuffering) return;
-//
-//    ///to do 没有网络
-//
-//    self.isBuffering = YES;
-//
-//    // 需要先暂停一小会之后再播放，否则网络状况不好的时候时间在走，声音播放不出来
-//    [self.player pause];
-//    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-//        // 如果此时用户已经暂停了，则不再需要开启播放了
-//        if (!self.isPlaying) {
-//            self.isBuffering = NO;
-//            return;
-//        }
-//        [self play];
-//        // 如果执行了play还是没有播放则说明还没有缓存好，则再次缓存一段时间
-//        self.isBuffering = NO;
-//        if (!self.player.currentItem.isPlaybackLikelyToKeepUp) [self bufferingSomeSecond];
-//    });
-//}
-
-
 - (void)observeValueForKeyPath:(NSString*)path
                       ofObject:(id)object
                         change:(NSDictionary*)change
@@ -487,14 +404,6 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
         if ([urlAsset URL]) {
             url = [[(AVURLAsset *)[[_player currentItem] asset] URL] absoluteString];
         }
-        //test
-//        _isInitialized = true;
-//        _eventSink(@{
-//          @"event" : @"initialized",
-//          @"duration" : @(1),
-//          @"width" : @(1),
-//          @"height" : @(1),
-//        });
     }
     if ([[url lowercaseString] containsString:@".m3u8"] && _eventSink && !_isInitialized) {
         CGSize size = _renderSize;
@@ -523,10 +432,6 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
         if (height == CGSizeZero.height && width == CGSizeZero.width) {
           return;
         }
-        // The player may be initialized but still needs to determine the duration.
-    //     if ([self duration] == 0) {  ??
-    //       return;
-    //     }
 
         _isInitialized = true;
         _eventSink(@{
@@ -657,8 +562,6 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     _itemStalledObserver = nil;
     
     [_player replaceCurrentItemWithPlayerItem:nil];
-//    [_player removeTimeObserver:_timeObserver];
-//    _timeObserver = nil;
 }
 
 - (void)dispose {
@@ -707,7 +610,6 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
         //NSLog(@"Unsupport Content-Type Filter reviced URL : %@, %@", URL, contentType);
         return NO;
     }];
-//    [KTVHTTPCache downloadSetTimeoutInterval:30];
     [KTVHTTPCache cacheSetMaxCacheLength:2000 * 1024 * 1024];
 }
 
