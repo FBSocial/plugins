@@ -12,6 +12,16 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 void main() {
+  // Pigeon.run([
+  //   "--input ../pigeons/message.dart",
+  //   "--dart_out ../lib/messaget.dart",
+  //   "--objc_header_out ios/Classes/messages.h",
+  //   "--objc_source_out ios/Classes/messages.m",
+  //   "—-objc_prefix = 'FLT'",
+  //   "--java_out ../android/app/src/main/java/dev/flutter/pigeon/Pigeon.java",
+  //   "--java_package \"dev.flutter.pigeon\""
+  // ]);
+
   runApp(
     MaterialApp(
       home: _App(),
@@ -71,13 +81,13 @@ class _ButterFlyAssetVideoInList extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: <Widget>[
-        _ExampleCard(title: "Item a"),
-        _ExampleCard(title: "Item b"),
-        _ExampleCard(title: "Item c"),
-        _ExampleCard(title: "Item d"),
-        _ExampleCard(title: "Item e"),
-        _ExampleCard(title: "Item f"),
-        _ExampleCard(title: "Item g"),
+        _ExampleCard(title: "Item a", key: UniqueKey()),
+        _ExampleCard(title: "Item b", key: UniqueKey()),
+        _ExampleCard(title: "Item c", key: UniqueKey()),
+        _ExampleCard(title: "Item d", key: UniqueKey()),
+        _ExampleCard(title: "Item e", key: UniqueKey()),
+        _ExampleCard(title: "Item f", key: UniqueKey()),
+        _ExampleCard(title: "Item g", key: UniqueKey()),
         Card(
             child: Column(children: <Widget>[
           Column(
@@ -96,11 +106,11 @@ class _ButterFlyAssetVideoInList extends StatelessWidget {
             ],
           ),
         ])),
-        _ExampleCard(title: "Item h"),
-        _ExampleCard(title: "Item i"),
-        _ExampleCard(title: "Item j"),
-        _ExampleCard(title: "Item k"),
-        _ExampleCard(title: "Item l"),
+        _ExampleCard(title: "Item h", key: UniqueKey()),
+        _ExampleCard(title: "Item i", key: UniqueKey()),
+        _ExampleCard(title: "Item j", key: UniqueKey()),
+        _ExampleCard(title: "Item k", key: UniqueKey()),
+        _ExampleCard(title: "Item l", key: UniqueKey()),
       ],
     );
   }
@@ -108,7 +118,7 @@ class _ButterFlyAssetVideoInList extends StatelessWidget {
 
 /// A filler card to show the video in a list of scrolling contents.
 class _ExampleCard extends StatelessWidget {
-  const _ExampleCard({Key? key, required this.title}) : super(key: key);
+  const _ExampleCard({required Key key, required this.title}) : super(key: key);
 
   final String title;
 
@@ -124,13 +134,13 @@ class _ExampleCard extends StatelessWidget {
           ),
           ButtonBar(
             children: <Widget>[
-              TextButton(
+              FlatButton(
                 child: const Text('BUY TICKETS'),
                 onPressed: () {
                   /* ... */
                 },
               ),
-              TextButton(
+              FlatButton(
                 child: const Text('SELL TICKETS'),
                 onPressed: () {
                   /* ... */
@@ -188,7 +198,7 @@ class _ButterFlyAssetVideoState extends State<_ButterFlyAssetVideo> {
                 alignment: Alignment.bottomCenter,
                 children: <Widget>[
                   VideoPlayer(_controller),
-                  _ControlsOverlay(controller: _controller),
+                  _ControlsOverlay(controller: _controller, key: UniqueKey()),
                   VideoProgressIndicator(_controller, allowScrubbing: true),
                 ],
               ),
@@ -218,10 +228,23 @@ class _BumbleBeeRemoteVideoState extends State<_BumbleBeeRemoteVideo> {
   @override
   void initState() {
     super.initState();
+
+    // final url =
+    //     "https://fb-cdn.fanbook.mobi/fanbook/app/files/chatroom/video/912ac8ce696edb5280fb353a5c776082.mp4.cachevideo";
+    // "http://fb-cdn.fanbook.mobi/fanbook/download/tmp/output.mp4.cachevideo";
+
+    // 央视直播流
+    // final url =
+    //     "http://cctvalih5ca.v.myalicdn.com/live/cctv1_2/index.m3u8";
+    //长视频
+    // final url =
+    //     "http://fb-cdn.fanbook.mobi/fanbook/download/tmp/output.mp4.cachevideo";
+    final url =
+        "https://fanbookvideonewtest-1251001060.file.myqcloud.com/fanbook/app/files/chatroom/video/1645cc955e33476b42dccf59caea83d1.mp4.cachevideo";
     _controller = VideoPlayerController.network(
-      'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
+      url,
       closedCaptionFile: _loadCaptions(),
-      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      // videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
     );
 
     _controller.addListener(() {
@@ -253,7 +276,7 @@ class _BumbleBeeRemoteVideoState extends State<_BumbleBeeRemoteVideo> {
                 children: <Widget>[
                   VideoPlayer(_controller),
                   ClosedCaption(text: _controller.value.caption.text),
-                  _ControlsOverlay(controller: _controller),
+                  _ControlsOverlay(controller: _controller, key: UniqueKey()),
                   VideoProgressIndicator(_controller, allowScrubbing: true),
                 ],
               ),
@@ -266,7 +289,7 @@ class _BumbleBeeRemoteVideoState extends State<_BumbleBeeRemoteVideo> {
 }
 
 class _ControlsOverlay extends StatelessWidget {
-  const _ControlsOverlay({Key? key, required this.controller})
+  const _ControlsOverlay({required Key key, required this.controller})
       : super(key: key);
 
   static const _examplePlaybackRates = [

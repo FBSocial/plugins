@@ -451,7 +451,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
   }
 
   Future<void> _applyPlayPause() async {
-    if (_isDisposedOrNotInitialized) {
+    if ((!value.isInitialized || _isDisposed) && !kIsWeb) {
       return;
     }
     if (value.isPlaying) {

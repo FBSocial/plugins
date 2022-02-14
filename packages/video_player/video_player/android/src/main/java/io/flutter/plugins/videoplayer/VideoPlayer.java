@@ -9,7 +9,13 @@ import static com.google.android.exoplayer2.Player.REPEAT_MODE_OFF;
 
 import android.content.Context;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.os.StatFs;
 import android.view.Surface;
+
+import com.danikula.videocache.CacheListener;
+import com.danikula.videocache.HttpProxyCacheServer;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlaybackException;
 import com.google.android.exoplayer2.Format;
@@ -32,13 +38,15 @@ import com.google.android.exoplayer2.upstream.DefaultHttpDataSource;
 import com.google.android.exoplayer2.util.Util;
 import io.flutter.plugin.common.EventChannel;
 import io.flutter.view.TextureRegistry;
+
+import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-final class VideoPlayer {
+final class VideoPlayer implements CacheListener {
   private static final String FORMAT_SS = "ss";
   private static final String FORMAT_DASH = "dash";
   private static final String FORMAT_HLS = "hls";
@@ -58,6 +66,8 @@ final class VideoPlayer {
 
   private final VideoPlayerOptions options;
 
+  private HttpProxyCacheServer proxyCacheServer;
+
   VideoPlayer(
       Context context,
       EventChannel eventChannel,
@@ -65,14 +75,29 @@ final class VideoPlayer {
       String dataSource,
       String formatHint,
       Map<String, String> httpHeaders,
-      VideoPlayerOptions options) {
+      VideoPlayerOptions options,
+      HttpProxyCacheServer proxyCacheServer) {
     this.eventChannel = eventChannel;
     this.textureEntry = textureEntry;
     this.options = options;
+    this.proxyCacheServer = proxyCacheServer;
+
+    String proxyUrl;
+    if (dataSource.endsWith(".cachevideo")) {
+      dataSource = dataSource.substring(0, dataSource.length() - ".cachevideo".length());
+      if (proxyCacheServer.canCache()) {
+        proxyCacheServer.registerCacheListener(this, dataSource);
+        proxyUrl = proxyCacheServer.getProxyUrl(dataSource);
+      }else {
+        proxyUrl = dataSource;
+      }
+    }else {
+      proxyUrl = dataSource;
+    }
 
     exoPlayer = new SimpleExoPlayer.Builder(context).build();
 
-    Uri uri = Uri.parse(dataSource);
+    Uri uri = Uri.parse(proxyUrl);
 
     DataSource.Factory dataSourceFactory;
     if (isHTTP(uri)) {
@@ -299,5 +324,10 @@ final class VideoPlayer {
     if (exoPlayer != null) {
       exoPlayer.release();
     }
+  }
+
+  @Override
+  public void onCacheAvailable(File cacheFile, String url, int percentsAvailable) {
+
   }
 }

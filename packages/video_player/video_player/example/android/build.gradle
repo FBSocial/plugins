@@ -2,10 +2,14 @@ buildscript {
     repositories {
         google()
         mavenCentral()
+//        maven{ url 'https://maven.aliyun.com/repository/google' }
+//        maven{ url 'https://maven.aliyun.com/repository/jcenter' }
+//        maven{ url 'https://maven.aliyun.com/repository/public'}
+//        maven{ url 'https://maven.aliyun.com/repository/gradle-plugin'}
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.0.1'
+        classpath 'com.android.tools.build:gradle:4.2.0'
     }
 }
 
@@ -13,6 +17,13 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+//        maven {
+//            url 'https://google.bintray.com/exoplayer/'
+//        }
+//        maven{ url 'https://maven.aliyun.com/repository/google' }
+//        maven{ url 'https://maven.aliyun.com/repository/jcenter' }
+//        maven{ url 'https://maven.aliyun.com/repository/public'}
+//        maven{ url 'https://maven.aliyun.com/repository/gradle-plugin'}
     }
 }
 

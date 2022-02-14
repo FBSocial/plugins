@@ -6,9 +6,13 @@ package io.flutter.plugins.videoplayer;
 
 import android.content.Context;
 import android.os.Build;
+import android.util.Log;
 import android.util.LongSparseArray;
+
+import com.danikula.videocache.HttpProxyCacheServer;
+import com.danikula.videocache.Utils;
+
 import io.flutter.FlutterInjector;
-import io.flutter.Log;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
@@ -32,6 +36,7 @@ public class VideoPlayerPlugin implements FlutterPlugin, VideoPlayerApi {
   private final LongSparseArray<VideoPlayer> videoPlayers = new LongSparseArray<>();
   private FlutterState flutterState;
   private VideoPlayerOptions options = new VideoPlayerOptions();
+  private HttpProxyCacheServer proxy;
 
   /** Register this with the v2 embedding for the plugin to respond to lifecycle callbacks. */
   public VideoPlayerPlugin() {}
@@ -84,10 +89,15 @@ public class VideoPlayerPlugin implements FlutterPlugin, VideoPlayerApi {
             injector.flutterLoader()::getLookupKeyForAsset,
             binding.getTextureRegistry());
     flutterState.startListening(this, binding.getBinaryMessenger());
+    proxy = new HttpProxyCacheServer.Builder(flutterState.applicationContext)
+            .cacheDirectory(Utils.getVideoCacheDir(flutterState.applicationContext))
+            .maxCacheSize(110 * 1024 * 1024)
+            .build();
   }
 
   @Override
   public void onDetachedFromEngine(FlutterPluginBinding binding) {
+    proxy.shutdown();
     if (flutterState == null) {
       Log.wtf(TAG, "Detached from the engine before registering to it.");
     }
@@ -140,7 +150,7 @@ public class VideoPlayerPlugin implements FlutterPlugin, VideoPlayerApi {
               "asset:///" + assetLookupKey,
               null,
               null,
-              options);
+              options, proxy);
     } else {
       @SuppressWarnings("unchecked")
       Map<String, String> httpHeaders = arg.getHttpHeaders();
@@ -152,7 +162,7 @@ public class VideoPlayerPlugin implements FlutterPlugin, VideoPlayerApi {
               arg.getUri(),
               arg.getFormatHint(),
               httpHeaders,
-              options);
+              options, proxy);
     }
     videoPlayers.put(handle.id(), player);
 

@@ -32,6 +32,8 @@ android {
     defaultConfig {
         minSdkVersion 16
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        versionCode 2210
+        versionName "2.2.10"
     }
     lintOptions {
         disable 'InvalidPackage'
@@ -49,8 +51,8 @@ android {
         implementation 'com.google.android.exoplayer:exoplayer-smoothstreaming:2.14.1'
         testImplementation 'junit:junit:4.12'
         testImplementation 'org.mockito:mockito-inline:3.9.0'
+        implementation 'org.slf4j:slf4j-android:1.7.21'
     }
-
 
     testOptions {
         unitTests.includeAndroidResources = true
@@ -61,6 +63,17 @@ android {
                outputs.upToDateWhen {false}
                showStandardStreams = true
             }
+        }
+    }
+
+    buildTypes {
+        debug{
+            buildConfigField("long", "VERSION_CODE", "${defaultConfig.versionCode}")
+            buildConfigField("String","VERSION_NAME","\"${defaultConfig.versionName}\"")
+        }
+        release {
+            buildConfigField("long", "VERSION_CODE", "${defaultConfig.versionCode}")
+            buildConfigField("String","VERSION_NAME","\"${defaultConfig.versionName}\"")
         }
     }
 }
