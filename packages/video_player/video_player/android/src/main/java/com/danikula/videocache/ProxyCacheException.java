@@ -9,7 +9,7 @@ import io.flutter.plugins.videoplayer.BuildConfig;
  */
 public class ProxyCacheException extends Exception {
 
-    private static final String LIBRARY_VERSION = ". Version: " + BuildConfig.VERSION_NAME;
+    private static final String LIBRARY_VERSION = ". Version: " + "2.2.10";
 
     public ProxyCacheException(String message) {
         super(message + LIBRARY_VERSION);
