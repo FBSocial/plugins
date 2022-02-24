@@ -167,36 +167,42 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
 - (AVMutableVideoComposition*)getVideoCompositionWithTransform:(CGAffineTransform)transform
                                                      withAsset:(AVAsset*)asset
                                                 withVideoTrack:(AVAssetTrack*)videoTrack {
-  AVMutableVideoCompositionInstruction* instruction =
+    AVMutableVideoCompositionInstruction* instruction =
       [AVMutableVideoCompositionInstruction videoCompositionInstruction];
-  instruction.timeRange = CMTimeRangeMake(kCMTimeZero, [asset duration]);
-  AVMutableVideoCompositionLayerInstruction* layerInstruction =
-      [AVMutableVideoCompositionLayerInstruction
+    instruction.timeRange = CMTimeRangeMake(kCMTimeZero, [asset duration]);
+    AVMutableVideoCompositionLayerInstruction* layerInstruction = [AVMutableVideoCompositionLayerInstruction
           videoCompositionLayerInstructionWithAssetTrack:videoTrack];
-  [layerInstruction setTransform:_preferredTransform atTime:kCMTimeZero];
+    //获取视频方向
+    NSInteger rotationDegrees =
+          (NSInteger)round(radiansToDegrees(atan2(_preferredTransform.b, _preferredTransform.a)));
+    CGFloat width = videoTrack.naturalSize.width;
+    CGFloat height = videoTrack.naturalSize.height;
 
-  AVMutableVideoComposition* videoComposition = [AVMutableVideoComposition videoComposition];
-  instruction.layerInstructions = @[ layerInstruction ];
-  videoComposition.instructions = @[ instruction ];
-
-  // If in portrait mode, switch the width and height of the video
-  CGFloat width = videoTrack.naturalSize.width;
-  CGFloat height = videoTrack.naturalSize.height;
-  NSInteger rotationDegrees =
-      (NSInteger)round(radiansToDegrees(atan2(_preferredTransform.b, _preferredTransform.a)));
-  if (rotationDegrees == 90 || rotationDegrees == 270) {
-    width = videoTrack.naturalSize.height;
-    height = videoTrack.naturalSize.width;
-  }
-  videoComposition.renderSize = CGSizeMake(width, height);
-  _renderSize = videoComposition.renderSize;  //[dj]:[ID1090896]
-
+    if (rotationDegrees == 90 || rotationDegrees == 270) {
+        //视频90/270 修改画面宽高
+        width = videoTrack.naturalSize.height;
+        height = videoTrack.naturalSize.width;
+        [layerInstruction setTransform:_preferredTransform atTime:kCMTimeZero];
+    }else if(rotationDegrees == 180){
+        //视频180，修正画面
+        CGAffineTransform rotateTransform = CGAffineTransformMakeRotation(M_PI);
+        CGAffineTransform translateTransform = CGAffineTransformMakeTranslation(width, height);
+        [layerInstruction setTransform:CGAffineTransformConcat(rotateTransform, translateTransform) atTime:kCMTimeZero];
+    }else{
+        [layerInstruction setTransform:_preferredTransform atTime:kCMTimeZero];
+    }
+   
+    AVMutableVideoComposition* videoComposition = [AVMutableVideoComposition videoComposition];
+    instruction.layerInstructions = @[ layerInstruction ];
+    videoComposition.instructions = @[ instruction ];
+  
+    videoComposition.renderSize = CGSizeMake(width, height);
+    _renderSize = videoComposition.renderSize;  //[dj]:[ID1090896]
 
   // TODO(@recastrodiaz): should we use videoTrack.nominalFrameRate ?
   // Currently set at a constant 30 FPS
-  videoComposition.frameDuration = CMTimeMake(1, 30);
-
-  return videoComposition;
+    videoComposition.frameDuration = CMTimeMake(1, 30);
+    return videoComposition;
 }
 
 - (void)createVideoOutputAndDisplayLink:(FLTFrameUpdater*)frameUpdater {
@@ -205,7 +211,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     (id)kCVPixelBufferIOSurfacePropertiesKey : @{}
   };
   _videoOutput = [[AVPlayerItemVideoOutput alloc] initWithPixelBufferAttributes:pixBuffAttributes];
-
+    
    _displayLink = [CADisplayLink displayLinkWithTarget:frameUpdater
                                              selector:@selector(onDisplayLink:)];
   [_displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
