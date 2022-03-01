@@ -9,9 +9,6 @@ import static com.google.android.exoplayer2.Player.REPEAT_MODE_OFF;
 
 import android.content.Context;
 import android.net.Uri;
-import android.os.Build;
-import android.os.Environment;
-import android.os.StatFs;
 import android.view.Surface;
 
 import com.danikula.videocache.CacheListener;
@@ -35,7 +32,11 @@ import com.google.android.exoplayer2.source.smoothstreaming.SsMediaSource;
 import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource;
+import com.google.android.exoplayer2.upstream.DefaultLoadErrorHandlingPolicy;
+import com.google.android.exoplayer2.upstream.HttpDataSource;
 import com.google.android.exoplayer2.util.Util;
+import com.google.android.exoplayer2.video.VideoSize;
+
 import io.flutter.plugin.common.EventChannel;
 import io.flutter.view.TextureRegistry;
 
@@ -45,6 +46,24 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+final class NetLoadErrorPolicy
+        extends DefaultLoadErrorHandlingPolicy {
+  @Override
+  public long getRetryDelayMsFor(LoadErrorInfo loadErrorInfo) {
+    // 网络错误，每隔6秒重试一次
+    if(loadErrorInfo.exception instanceof HttpDataSource.HttpDataSourceException){
+      return 6000;
+    }else{
+      return  C.TIME_UNSET;
+    }
+  }
+
+  @Override
+  public int getMinimumLoadableRetryCount(int dataType) {
+    return Integer.MAX_VALUE;
+  }
+}
 
 final class VideoPlayer implements CacheListener {
   private static final String FORMAT_SS = "ss";
@@ -169,6 +188,7 @@ final class VideoPlayer implements CacheListener {
             .createMediaSource(MediaItem.fromUri(uri));
       case C.TYPE_OTHER:
         return new ProgressiveMediaSource.Factory(mediaDataSourceFactory)
+                .setLoadErrorHandlingPolicy(new NetLoadErrorPolicy())
             .createMediaSource(MediaItem.fromUri(uri));
       default:
         {
