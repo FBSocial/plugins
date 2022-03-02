@@ -319,16 +319,16 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
                 [videoTrack loadValuesAsynchronouslyForKeys:@[ @"preferredTransform" ]
                                       completionHandler:^(){
                 strongify(self);
-                if (self->_disposed) return;
+                if (self.disposed) return;
                 if ([videoTrack statusOfValueForKey:@"preferredTransform"
                                               error:nil] == AVKeyValueStatusLoaded) {
                     // Rotate the video by using a videoComposition and the preferredTransform
-                    self->_preferredTransform = [self fixTransform:videoTrack];
+                    self.preferredTransform = [self fixTransform:videoTrack];
                     // Note:
                     // https://developer.apple.com/documentation/avfoundation/avplayeritem/1388818-videocomposition
                     // Video composition can only be used with file-based media and is not supported for
                     // use with media served using HTTP Live Streaming.
-                    AVMutableVideoComposition* videoComposition = [self getVideoCompositionWithTransform:self->_preferredTransform
+                    AVMutableVideoComposition* videoComposition = [self getVideoCompositionWithTransform:self.preferredTransform
                                                    withAsset:[self.player.currentItem asset]
                                               withVideoTrack:videoTrack];
                     self.player.currentItem.videoComposition = videoComposition;
