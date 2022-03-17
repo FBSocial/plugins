@@ -242,10 +242,12 @@ class _BumbleBeeRemoteVideoState extends State<_BumbleBeeRemoteVideo> {
     // final url =
     //     "https://fanbookvideonewtest-1251001060.file.myqcloud.com/fanbook/app/files/chatroom/video/1645cc955e33476b42dccf59caea83d1.mp4.cachevideo";
     //倒立视频
-    final url =
-        "https://fb-cdn-video.fanbook.mobi/fanbook/app/files/chatroom/video/cc725aa6ad958375490d89b446d8d6ff.mp4";
+    // final url =
+    // "https://fb-cdn-video.fanbook.mobi/fanbook/app/files/chatroom/video/cc725aa6ad958375490d89b446d8d6ff.mp4";
     // final url =
     //     "http://fanbook-video-1251001060.cos.accelerate.myqcloud.com/fanbook/app/files/chatroom/video/2345008996ccbcebd6bf48782c97c6db.mp4";
+    final url =
+        "https://fb-cdn-video.fanbook.mobi/fanbook/app/files/chatroom/video/3f319e82d369ef15ced04d2b78519c54.mp4";
     _controller = VideoPlayerController.network(
       url,
       closedCaptionFile: _loadCaptions(),
@@ -256,7 +258,9 @@ class _BumbleBeeRemoteVideoState extends State<_BumbleBeeRemoteVideo> {
       setState(() {});
     });
     _controller.setLooping(true);
-    _controller.initialize();
+    _controller.initialize().catchError((e) {
+      print('出错了: $e');
+    });
   }
 
   @override

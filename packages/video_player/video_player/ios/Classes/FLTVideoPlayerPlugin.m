@@ -365,11 +365,18 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
   } else if (context == statusContext) {
     AVPlayerItem* item = (AVPlayerItem*)object;
     switch (item.status) {
-      case AVPlayerItemStatusFailed:
+        case AVPlayerItemStatusFailed:{
+            NSInteger code = item.error.code;
+            if(code == -1102){
+                //https://developer.apple.com/documentation/foundation/1508628-url_loading_system_error_codes/nsurlerrornopermissionstoreadfile
+                //资源不合规
+                code = 403;
+            }
         [self notifyEventSink:[FlutterError
                                errorWithCode:@"VideoError"
                                message:[@"Failed to load video: "stringByAppendingString:[item.error localizedDescription]]
-                               details:nil]];
+                               details:@{@"code": @(code)}]];
+        }
         break;
       case AVPlayerItemStatusUnknown:
         break;
