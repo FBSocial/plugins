@@ -335,8 +335,6 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
                       ofObject:(id)object
                         change:(NSDictionary*)change
                        context:(void*)context {
-//    NSLog(@"observeValueForKeyPath: %@", path);
-    
   if (context == timeRangeContext) {
     if (_eventSink != nil) {
       NSMutableArray<NSArray<NSNumber*>*>* values = [[NSMutableArray alloc] init];
@@ -351,14 +349,10 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     AVPlayerItem* item = (AVPlayerItem*)object;
     switch (item.status) {
         case AVPlayerItemStatusFailed:{
-            NSInteger code = item.error.code;
-            if(code == -1102){
-                //https://developer.apple.com/documentation/foundation/1508628-url_loading_system_error_codes/nsurlerrornopermissionstoreadfile
-                //资源不合规
-                code = 403;
-            }
+        //资源不合规https://developer.apple.com/documentation/foundation/1508628-url_loading_system_error_codes/nsurlerrornopermissionstoreadfile
+        NSInteger code = item.error.code;
         [self notifyEventSink:[FlutterError
-                               errorWithCode:@"VideoError"
+                               errorWithCode: code == -1102 ? @"403" : @"VideoError"
                                message:[@"Failed to load video: "stringByAppendingString:[item.error localizedDescription]]
                                details:@{@"code": @(code)}]];
         }
