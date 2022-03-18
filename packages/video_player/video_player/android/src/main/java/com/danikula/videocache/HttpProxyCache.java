@@ -94,6 +94,8 @@ class HttpProxyCache extends ProxyCache {
                 offset += readBytes;
             }
             out.flush();
+        } catch (Exception e){
+            listener.onUrlError(e, source.getUrl());
         } finally {
             newSourceNoCache.close();
         }

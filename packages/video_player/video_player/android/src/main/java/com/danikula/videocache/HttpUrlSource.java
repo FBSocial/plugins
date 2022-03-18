@@ -20,6 +20,7 @@ import java.util.Map;
 
 import static com.danikula.videocache.Preconditions.checkNotNull;
 import static com.danikula.videocache.ProxyCacheUtils.DEFAULT_BUFFER_SIZE;
+import static java.net.HttpURLConnection.HTTP_FORBIDDEN;
 import static java.net.HttpURLConnection.HTTP_MOVED_PERM;
 import static java.net.HttpURLConnection.HTTP_MOVED_TEMP;
 import static java.net.HttpURLConnection.HTTP_OK;
@@ -74,16 +75,19 @@ public class HttpUrlSource implements Source {
 
     @Override
     public void open(long offset) throws ProxyCacheException {
+        String errorCode = null;
         try {
             connection = openConnection(offset, -1);
             String mime = connection.getContentType();
+            if (connection.getResponseCode() == HTTP_FORBIDDEN) errorCode = HTTP_FORBIDDEN + "";
             inputStream = new BufferedInputStream(connection.getInputStream(), DEFAULT_BUFFER_SIZE);
             long length = readSourceAvailableBytes(connection, offset, connection.getResponseCode());
             this.sourceInfo = new SourceInfo(sourceInfo.url, length, mime);
             this.sourceInfoStorage.put(sourceInfo.url, sourceInfo);
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new ProxyCacheException("Error opening connection for " + sourceInfo.url + " with offset " + offset, e);
         }
+        if (errorCode != null) throw new ProxyCacheException("Error opening connection for " + sourceInfo.url + " with offset " + offset, null, errorCode);
     }
 
     private long readSourceAvailableBytes(HttpURLConnection connection, long offset, int responseCode) throws IOException {
@@ -134,22 +138,25 @@ public class HttpUrlSource implements Source {
         LOG.debug("Read content info from " + sourceInfo.url);
         HttpURLConnection urlConnection = null;
         InputStream inputStream = null;
+        String errorCode = null;
         try {
             urlConnection = openConnection(0, 10000);
+            if (urlConnection.getResponseCode() == HTTP_FORBIDDEN) throw new Exception(HTTP_FORBIDDEN + "");
             long length = getContentLength(urlConnection);
             String mime = urlConnection.getContentType();
             inputStream = urlConnection.getInputStream();
             this.sourceInfo = new SourceInfo(sourceInfo.url, length, mime);
             this.sourceInfoStorage.put(sourceInfo.url, sourceInfo);
             LOG.debug("Source info fetched: " + sourceInfo);
-        } catch (IOException e) {
-            LOG.error("Error fetching info from " + sourceInfo.url, e);
+        } catch (Exception e) {
+            errorCode = e.getMessage();
         } finally {
             ProxyCacheUtils.close(inputStream);
             if (urlConnection != null) {
                 urlConnection.disconnect();
             }
         }
+        if (errorCode != null) throw new ProxyCacheException("Error reading data from " + sourceInfo.url, null, errorCode);
     }
 
     private HttpURLConnection openConnection(long offset, int timeout) throws IOException, ProxyCacheException {

@@ -13,6 +13,7 @@ import android.view.Surface;
 
 import com.danikula.videocache.CacheListener;
 import com.danikula.videocache.HttpProxyCacheServer;
+import com.danikula.videocache.ProxyCacheException;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlaybackException;
 import com.google.android.exoplayer2.Format;
@@ -87,6 +88,10 @@ final class VideoPlayer implements CacheListener {
 
   private HttpProxyCacheServer proxyCacheServer;
 
+  private HashMap<String, String> urlForbidenErrorMap = new HashMap<>();
+
+  private String dataSource;
+
   VideoPlayer(
       Context context,
       EventChannel eventChannel,
@@ -101,9 +106,11 @@ final class VideoPlayer implements CacheListener {
     this.options = options;
     this.proxyCacheServer = proxyCacheServer;
 
+
     String proxyUrl;
     if (dataSource.endsWith(".cachevideo")) {
       dataSource = dataSource.substring(0, dataSource.length() - ".cachevideo".length());
+      this.dataSource = dataSource;
       if (proxyCacheServer.canCache()) {
         proxyCacheServer.registerCacheListener(this, dataSource);
         proxyUrl = proxyCacheServer.getProxyUrl(dataSource);
@@ -111,6 +118,7 @@ final class VideoPlayer implements CacheListener {
         proxyUrl = dataSource;
       }
     }else {
+      this.dataSource = dataSource;
       proxyUrl = dataSource;
     }
 
@@ -254,7 +262,12 @@ final class VideoPlayer implements CacheListener {
           public void onPlayerError(final ExoPlaybackException error) {
             setBuffering(false);
             if (eventSink != null) {
-              eventSink.error("VideoError", "Video player had error " + error, null);
+              if (urlForbidenErrorMap.containsKey(dataSource)){
+                eventSink.error("403", "Video player had error " + error, null);
+              } else {
+                eventSink.error("VideoError", "Video player had error " + error, null);
+              }
+
             }
           }
         });
@@ -349,5 +362,10 @@ final class VideoPlayer implements CacheListener {
   @Override
   public void onCacheAvailable(File cacheFile, String url, int percentsAvailable) {
 
+  }
+
+  @Override
+  public void onUrlError(Exception error, String url) {
+    if ((error instanceof ProxyCacheException)&& ((ProxyCacheException)error).errorCode == "403") urlForbidenErrorMap.put(url, "403");
   }
 }

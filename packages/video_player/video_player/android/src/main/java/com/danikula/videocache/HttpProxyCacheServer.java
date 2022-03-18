@@ -234,10 +234,11 @@ public class HttpProxyCacheServer {
     }
 
     private void processSocket(Socket socket) {
+        String url = null;
         try {
             GetRequest request = GetRequest.read(socket.getInputStream());
             LOG.debug("Request to cache proxy:" + request);
-            String url = ProxyCacheUtils.decode(request.uri);
+            url = ProxyCacheUtils.decode(request.uri);
             if (pinger.isPingRequest(url)) {
                 pinger.responseToPing(socket);
             } else {
