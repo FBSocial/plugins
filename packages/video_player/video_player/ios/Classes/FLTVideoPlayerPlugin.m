@@ -14,8 +14,6 @@ _Pragma("clang diagnostic pop")
 #import <CommonCrypto/CommonDigest.h>
 #import <GLKit/GLKit.h>
 #import "messages.h"
-#import "DVURLAsset.h"
-#import "Reachability.h"
 #import <KTVHTTPCache/KTVHTTPCache.h>
 #if !__has_feature(objc_arc)
 #error Code Requires ARC.
@@ -65,6 +63,7 @@ int64_t FLTCMTimeToMillis(CMTime time) {
 @property(nonatomic, readonly) bool isInitialized;
 @property (nonatomic, assign) BOOL isBuffering;
 @property (nonatomic, assign) BOOL isReadyToPlay;
+@property (nonatomic, copy) NSString *originMediaUrl;
 
 - (instancetype)initWithURL:(NSURL*)url frameUpdater:(FLTFrameUpdater*)frameUpdater;
 - (void)play;
@@ -218,10 +217,13 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
         NSString *urlString = [url absoluteString];
         urlString = [urlString substringToIndex:[urlString rangeOfComposedCharacterSequenceAtIndex:[urlString length] - [@".cachevideo" length]].location];
         url = [NSURL URLWithString:urlString];
+        _originMediaUrl = urlString;
         NSURL *proxyURL = [KTVHTTPCache proxyURLWithOriginalURL:url];
             
         AVPlayerItem* item = [AVPlayerItem playerItemWithURL:proxyURL];
         return [self initWithPlayerItem:item frameUpdater:frameUpdater];
+    }else {
+        _originMediaUrl = url.absoluteString;
     }
     
     AVPlayerItem* item = [AVPlayerItem playerItemWithURL:url];
@@ -349,12 +351,7 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     AVPlayerItem* item = (AVPlayerItem*)object;
     switch (item.status) {
         case AVPlayerItemStatusFailed:{
-        //资源不合规https://developer.apple.com/documentation/foundation/1508628-url_loading_system_error_codes/nsurlerrornopermissionstoreadfile
-        NSInteger code = item.error.code;
-        [self notifyEventSink:[FlutterError
-                               errorWithCode: code == -1102 ? @"403" : @"VideoError"
-                               message:[@"Failed to load video: "stringByAppendingString:[item.error localizedDescription]]
-                               details:@{@"code": @(code)}]];
+            [self playItemError:item];
         }
         break;
       case AVPlayerItemStatusUnknown:
@@ -388,6 +385,26 @@ static inline CGFloat radiansToDegrees(CGFloat radians) {
     } else {
       [super observeValueForKeyPath:path ofObject:object change:change context:context];
   }
+}
+
+- (void)playItemError:(AVPlayerItem*) item {
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:_originMediaUrl] cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:3];
+    [request setHTTPMethod:@"HEAD"];
+    NSURLSession *session = [NSURLSession sharedSession];
+    NSURLSessionDataTask *task = [session dataTaskWithRequest:request completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+        if (error == nil && [response isKindOfClass:[NSHTTPURLResponse class]] && ((NSHTTPURLResponse *)response).statusCode == 403) {
+            [self notifyEventSink:[FlutterError
+                                   errorWithCode: @"403"
+                                   message:[@"Failed to load video: "stringByAppendingString:[item.error localizedDescription]]
+                                   details:@{@"code": @403}]];
+        }else {
+            [self notifyEventSink:[FlutterError
+                                   errorWithCode: @"VideoError"
+                                   message:[@"Failed to load video: "stringByAppendingString:[item.error localizedDescription]]
+                                   details:nil]];
+        }
+    }];
+    [task resume];
 }
 
 - (void)updatePlayingState {
