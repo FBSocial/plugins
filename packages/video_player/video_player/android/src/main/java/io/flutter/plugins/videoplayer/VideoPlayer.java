@@ -36,7 +36,6 @@ import com.google.android.exoplayer2.upstream.DefaultHttpDataSource;
 import com.google.android.exoplayer2.upstream.DefaultLoadErrorHandlingPolicy;
 import com.google.android.exoplayer2.upstream.HttpDataSource;
 import com.google.android.exoplayer2.util.Util;
-import com.google.android.exoplayer2.video.VideoSize;
 
 import io.flutter.plugin.common.EventChannel;
 import io.flutter.view.TextureRegistry;
@@ -105,7 +104,6 @@ final class VideoPlayer implements CacheListener {
     this.textureEntry = textureEntry;
     this.options = options;
     this.proxyCacheServer = proxyCacheServer;
-
 
     String proxyUrl;
     if (dataSource.endsWith(".cachevideo")) {
@@ -366,6 +364,14 @@ final class VideoPlayer implements CacheListener {
 
   @Override
   public void onUrlError(Exception error, String url) {
-    if ((error instanceof ProxyCacheException)&& ((ProxyCacheException)error).errorCode == "403") urlForbidenErrorMap.put(url, "403");
+    if ((error instanceof ProxyCacheException)&& ((ProxyCacheException)error).errorCode == "403") {
+      urlForbidenErrorMap.put(url, "403");
+      if (eventSink != null){
+        Map<String, Object> event = new HashMap<>();
+        event.put("event","bufferingStart");
+        eventSink.success(event);
+        eventSink.error("403", "Video player had error " + error, null);
+      }
+    }
   }
 }
