@@ -9,6 +9,8 @@ import static com.google.android.exoplayer2.Player.REPEAT_MODE_OFF;
 
 import android.content.Context;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Surface;
 
 import com.danikula.videocache.CacheListener;
@@ -41,6 +43,8 @@ import io.flutter.plugin.common.EventChannel;
 import io.flutter.view.TextureRegistry;
 
 import java.io.File;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -90,6 +94,14 @@ final class VideoPlayer implements CacheListener {
   private HashMap<String, String> urlForbidenErrorMap = new HashMap<>();
 
   private String dataSource;
+
+  private Handler mainHandler = new Handler(Looper.getMainLooper());
+  private Runnable accessForbidenRunnable = new Runnable() {
+    @Override
+    public void run() {
+        if (eventSink != null) eventSink.error("403", "Video player had error ", null);
+    }
+  };
 
   VideoPlayer(
       Context context,
@@ -203,6 +215,28 @@ final class VideoPlayer implements CacheListener {
     }
   }
 
+  void checkMediaAccess(String url) {
+    new Thread(new Runnable() {
+      @Override
+      public void run() {
+        if (fetchUrlResultCode(url) == 403) mainHandler.post(accessForbidenRunnable);
+      }
+    }).start();
+  }
+
+  int fetchUrlResultCode(String url) {
+    int resultCode = 200;
+    try {
+      HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+      connection.setRequestMethod("GET");
+      connection.connect();
+      resultCode = connection.getResponseCode();
+    }catch (Exception e) {
+      e.printStackTrace();
+    }
+    return resultCode;
+  }
+
   private void setupVideoPlayer(
       EventChannel eventChannel, TextureRegistry.SurfaceTextureEntry textureEntry) {
     eventChannel.setStreamHandler(
@@ -254,6 +288,12 @@ final class VideoPlayer implements CacheListener {
             if (playbackState != Player.STATE_BUFFERING) {
               setBuffering(false);
             }
+          }
+
+          @Override
+          public void onIsLoadingChanged(boolean isLoading) {
+            Listener.super.onIsLoadingChanged(isLoading);
+            if (isLoading) checkMediaAccess(dataSource);
           }
 
           @Override
@@ -344,6 +384,7 @@ final class VideoPlayer implements CacheListener {
   }
 
   void dispose() {
+    mainHandler.removeCallbacks(accessForbidenRunnable);
     if (isInitialized) {
       exoPlayer.stop();
     }
