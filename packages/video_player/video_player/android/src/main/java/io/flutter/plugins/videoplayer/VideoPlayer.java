@@ -368,7 +368,7 @@ final class VideoPlayer implements CacheListener {
       urlForbidenErrorMap.put(url, "403");
       if (eventSink != null){
         Map<String, Object> event = new HashMap<>();
-        event.put("event","bufferingStart");
+        event.put("event","bufferingEnd");
         eventSink.success(event);
         eventSink.error("403", "Video player had error " + error, null);
       }
