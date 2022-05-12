@@ -106,26 +106,30 @@ typedef void (^GetSavedPath)(NSString *);
               }else {
                   PHAsset *originalAsset =
                       [FLTImagePickerPhotoAssetUtil getAssetFromPHPickerResult:self.result];
-                  [[PHImageManager defaultManager]
-                      requestImageDataForAsset:originalAsset
-                                       options:nil
-                                 resultHandler:^(
-                                     NSData *_Nullable imageData, NSString *_Nullable dataUTI,
-                                     UIImageOrientation orientation, NSDictionary *_Nullable info) {
-                                   // maxWidth and maxHeight are used only for GIF images.
-                                         if (imageData) {
-                                             NSString *savedPath = [FLTImagePickerPhotoAssetUtil
-                                           saveImageWithOriginalImageData:imageData
-                                                                    image:[UIImage imageWithData:imageData]
-                                                                 maxWidth:self.maxWidth
-                                                                maxHeight:self.maxHeight
-                                                             imageQuality:self.desiredImageQuality];
-                                             [self completeOperationWithPath:savedPath];
-                                         }else{
-                                             [self completeOperationWithPath:@""];
-                                         }
-                                 }];
-              }
+                  if (originalAsset) {
+                      [[PHImageManager defaultManager]
+                          requestImageDataForAsset:originalAsset
+                                           options:nil
+                                     resultHandler:^(
+                                         NSData *_Nullable imageData, NSString *_Nullable dataUTI,
+                                         UIImageOrientation orientation, NSDictionary *_Nullable info) {
+                                       // maxWidth and maxHeight are used only for GIF images.
+                                             if (imageData) {
+                                                 NSString *savedPath = [FLTImagePickerPhotoAssetUtil
+                                               saveImageWithOriginalImageData:imageData
+                                                                        image:[UIImage imageWithData:imageData]
+                                                                     maxWidth:self.maxWidth
+                                                                    maxHeight:self.maxHeight
+                                                                 imageQuality:self.desiredImageQuality];
+                                                 [self completeOperationWithPath:savedPath];
+                                             }else{
+                                                 [self completeOperationWithPath:@""];
+                                             }
+                      }];
+                  } else {
+                      [self completeOperationWithPath:@""];
+                  }
+                }
             }];
     } else {
         [self setFinished:YES];
